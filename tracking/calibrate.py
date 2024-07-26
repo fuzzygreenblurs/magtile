@@ -88,8 +88,9 @@ try:
 except Exception as e:
     print("Error during curve fitting:", e)
 
+
 ## perform simulation
-# time_step = 0.001
+time_step = 0.001
 # alpha_opt, beta1_opt = optimized_params  # Replace with optimized parameters
 # print(position_A, position_B)
 
