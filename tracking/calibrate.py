@@ -56,30 +56,30 @@ df.to_csv(output_file_path, index=False)
 ############################################################### REGRESSION ############################################################
 ############################################################### REGRESSION ############################################################
 
-## define state space model and objective functions 
-# Define the state-space model for x-position
 def state_space_model_x(params, x2_pred_minus, vx0):
+    # mu_0, prescaler = 1, 1
+    mu_0 = 1.256e-6
+    prescaler = 10
     alpha, beta1 = params
     r = np.sqrt((x2_pred_minus - position_B[0])**2 + h**2)
-    ax2_pred = -beta1 * vx0 + (alpha / r**5) * (1 - 5 * (h**2) / r**2) * (x2_pred_minus - position_B[0])
+    ax2_pred = -beta1 * vx0 + ((mu_0 * prescaler * alpha) / r**5) * (1 - 5 * (h**2) / r**2) * (x2_pred_minus - position_B[0])
     vx1 = vx0 + ax2_pred * time_step
     x2_pred = x2_pred_minus + vx1 * time_step
     return x2_pred
 
-# Define the combined objective function
-def combined_objective_function(inputs, alpha, beta1):
+def objective_function(inputs, alpha, beta1):
     params = [alpha, beta1]
     x2, vx2 = inputs
     x2_pred = state_space_model_x(params, x2, vx2)
-    residuals = df['x2'] - x2_pred
-    return residuals
+    # print(np.round(x2_pred, decimals=2), "\n")
+    return x2_pred
 
 inputs = np.array([df['x2'], df['vx2']])
-initial_guesses = [4, 9]
+initial_guesses = [6, 9]
 
 try:
     optimized_params, covariance = curve_fit(
-        combined_objective_function,
+        objective_function,
         inputs,
         df['x2'],
         p0=initial_guesses
@@ -93,30 +93,30 @@ except Exception as e:
 ############################################################### SIMULATION ############################################################
 ############################################################### SIMULATION ############################################################
 
-## perform simulation
-time_step = 1
-alpha_opt, beta1_opt = [0.00193154, 0.03980331]  # Replace with optimized parameters
-# alpha_opt, beta1_opt = optimized_params  # Replace with optimized parameters
-print(position_A, position_B)
+time_step = 0.01
+alpha_opt, beta1_opt = [0.72, 5]
 
-# # Define the state-space model for the x position
+# # # Define the state-space model for the x position
 def sim_state_space_model_x(params, x2, vx2):
+    # mu_0 = 1.256e-6
+    # prescaler = 10
+    mu_0, prescaler = 1, 1
     alpha, beta1 = params
     r = np.sqrt((x2 - position_B[0])**2 + h**2)
-    ax2_pred = -beta1 * vx2 + (alpha / r**5) * (1 - 5 * (h**2) / r**2) * (x2 - position_B[0])
+    ax2_pred = -beta1 * vx2 + ((mu_0 * prescaler * alpha) / r**5) * (1 - (5 * (h**2) / r**2)) * (x2 - position_B[0])
     return ax2_pred
 
-# # # Simulation parameters  # Time step (adjust based on your data)
-num_steps = 100  # Number of steps in the simulation
+# Simulation parameters  # Time step (adjust based on your data)
+num_steps = 500  # Number of steps in the simulation
 
-# # # Initial conditions
+# Initial conditions
 x2_pred = position_A[0]  # Initial position
 vx2_pred = 0.0  # Initial velocity
 print(x2_pred, vx2_pred)
 
-# # # Simulation loop using Euler method
+# Simulation loop using Euler method
 for i in range(num_steps):
     ax2_pred  = sim_state_space_model_x([alpha_opt, beta1_opt], x2_pred, vx2_pred)
     vx2_pred += ax2_pred * time_step
     x2_pred  += vx2_pred * time_step
-    print(x2_pred)
+    print(round(x2_pred, 3))
