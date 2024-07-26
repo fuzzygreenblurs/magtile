@@ -51,35 +51,35 @@ df.loc[0, 'vy2'] = 0
 output_file_path = '/Users/akhilsankar/workspace/swarms/tracking/combined_static_trial_dfs/ur/segment_1_trimmed.csv'
 df.to_csv(output_file_path, index=False)
 
+############################################################### REGRESSION ############################################################
+############################################################### REGRESSION ############################################################
+############################################################### REGRESSION ############################################################
+############################################################### REGRESSION ############################################################
+
 ## define state space model and objective functions 
-def state_space_model_x(params, x0, vx0, t):
+# Define the state-space model for x-position
+def state_space_model_x(params, x0, vx0):
     alpha, beta1 = params
     r = np.sqrt((x0 - position_B[0])**2 + h**2)
     ax2_pred = -beta1 * vx0 + (alpha / r**5) * (1 - 5 * (h**2) / r**2) * (x0 - position_B[0])
-    vx1 = vx0 + ax2_pred * t
-    x1 = x0 + vx1 * t
-    
+    vx1 = vx0 + ax2_pred * time_step
+    x1 = x0 + vx1 * time_step
     return x1
 
-def objective_function_x(params, x2, vx2, t, x_obs):
-    x_pred = state_space_model_x(params, x2, vx2, t)
-    residuals = x_obs - x_pred
-    return residuals
-
-def wrapped_objective_function_x(inputs, alpha, beta1):
+# Define the combined objective function
+def combined_objective_function(inputs, alpha, beta1):
     params = [alpha, beta1]
     x2, vx2 = inputs
-    t = np.arange(len(x2)) * time_step
-    return objective_function_x(params, x2, vx2, t, df['x2'])
+    x_pred = state_space_model_x(params, x2, vx2)
+    residuals = df['x2'] - x_pred
+    return residuals
 
-## perform regression
-
-initial_guesses = [0.01, 0.01]
 inputs = np.array([df['x2'], df['vx2']])
+initial_guesses = [5, 4]
 
 try:
     optimized_params, covariance = curve_fit(
-        wrapped_objective_function_x,
+        combined_objective_function,
         inputs,
         df['x2'],
         p0=initial_guesses
@@ -89,27 +89,27 @@ except Exception as e:
     print("Error during curve fitting:", e)
 
 ## perform simulation
-time_step = 0.0001
-alpha_opt, beta1_opt = optimized_params  # Replace with optimized parameters
-print(position_A, position_B)
+# time_step = 0.001
+# alpha_opt, beta1_opt = optimized_params  # Replace with optimized parameters
+# print(position_A, position_B)
 
-# Define the state-space model for the x position
-def state_space_model_x(params, x2, vx2):
-    alpha, beta1 = params
-    r = np.sqrt((x2 - position_B[0])**2 + h**2)
-    ax2_pred = -beta1 * vx2 + (alpha / r**5) * (1 - 5 * (h**2) / r**2) * (x2 - position_B[0])
-    return ax2_pred
+# # Define the state-space model for the x position
+# def sim_state_space_model_x(params, x2, vx2):
+#     alpha, beta1 = params
+#     r = np.sqrt((x2 - position_B[0])**2 + h**2)
+#     ax2_pred = -beta1 * vx2 + (alpha / r**5) * (1 - 5 * (h**2) / r**2) * (x2 - position_B[0])
+#     return ax2_pred
 
-# Simulation parameters  # Time step (adjust based on your data)
-num_steps = 10000  # Number of steps in the simulation
+# # Simulation parameters  # Time step (adjust based on your data)
+# num_steps = 10000  # Number of steps in the simulation
 
-# Initial conditions
-x2_pred = position_A[0]  # Initial position
-vx2_pred = 0.0  # Initial velocity
+# # Initial conditions
+# x2_pred = position_A[0]  # Initial position
+# vx2_pred = 0.0  # Initial velocity
 
-# Simulation loop using Euler method
-for i in range(num_steps):
-    ax2_pred  = state_space_model_x([alpha_opt, beta1_opt], x2_pred, vx2_pred)
-    vx2_pred += ax2_pred * time_step
-    x2_pred  += vx2_pred * time_step
-    print(x2_pred)
+# # Simulation loop using Euler method
+# for i in range(num_steps):
+#     ax2_pred  = sim_state_space_model_x([alpha_opt, beta1_opt], x2_pred, vx2_pred)
+#     vx2_pred += ax2_pred * time_step
+#     x2_pred  += vx2_pred * time_step
+#     print(x2_pred)
