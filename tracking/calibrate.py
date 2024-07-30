@@ -20,22 +20,24 @@ R2                  = 2.965 * MM_TO_IN          # disc radius
 z1 = 0
 z2 = (COIL_HEIGHT / 2) + (CASE_HEIGHT - COIL_HEIGHT) + (2 * SHEET_THICKNESS) + (DISC_HEIGHT / 2)
 h = z2 - z1
-position_A = np.array([2.48, -0.67])
-position_B = np.array([1.58, -1.58])
 frame_rate = 83
 time_step = 1 / frame_rate
 
 ## load csvs to df
-df = pd.read_csv('ur/ur_to_center/segment_1_trimmed.csv')
-positionA = [df.head(3)['h_pos'].mean(), df.head(3)['v_pos'].mean()]
-positionB = [df.tail(3)['h_pos'].mean(), df.tail(3)['v_pos'].mean()]
+TARGET = 'regression_tracked_actions/tracked_segmented'
+VERTEX = 'ur'
+# ACTION = f"center_to_{VERTEX}"
+ACTION = f"{VERTEX}_to_center"
+SEGMENT_ID = "segment_1"
 
-new_column_names = ['x2', 'y2']
-df.columns = new_column_names
+df = pd.read_csv(f"{TARGET}/{VERTEX}/{ACTION}/trimmed/{SEGMENT_ID}.csv")
+df.columns = ['x2', 'y2']
+position_A = [round(df.head(3)['x2'].mean(), 3), round(df.head(3)['y2'].mean(), 3)]
+position_B = [round(df.tail(3)['x2'].mean(), 3), round(df.tail(3)['y2'].mean(), 3)]
 df.ignore_index = True
 
 ## compute velocities
-SAME_POINT_THRESHOLD = 0.02 
+# SAME_POINT_THRESHOLD = 0.02 
 frame_rate = 83
 time_step = 1 / frame_rate
 
@@ -56,67 +58,119 @@ df.to_csv(output_file_path, index=False)
 ############################################################### REGRESSION ############################################################
 ############################################################### REGRESSION ############################################################
 
-def state_space_model_x(params, x2_pred_minus, vx0):
-    # mu_0, prescaler = 1, 1
-    mu_0 = 1.256e-6
-    prescaler = 10
-    alpha, beta1 = params
-    r = np.sqrt((x2_pred_minus - position_B[0])**2 + h**2)
-    ax2_pred = -beta1 * vx0 + ((mu_0 * prescaler * alpha) / r**5) * (1 - 5 * (h**2) / r**2) * (x2_pred_minus - position_B[0])
-    vx1 = vx0 + ax2_pred * time_step
-    x2_pred = x2_pred_minus + vx1 * time_step
-    return x2_pred
+## define state space model and objective functions 
+# Define the state-space model for x-position
+def state_space_model(params, x2_prior, y2_prior, vx2_prior, vy2_prior):
+    alpha, beta = params
+    r = np.sqrt(((x2_prior - position_B[0])**2) + ((y2_prior - position_B[1])**2) + (h**2))
 
-def objective_function(inputs, alpha, beta1):
-    params = [alpha, beta1]
-    x2, vx2 = inputs
-    x2_pred = state_space_model_x(params, x2, vx2)
-    # print(np.round(x2_pred, decimals=2), "\n")
-    return x2_pred
+    ax2      = -beta * vx2_prior + (alpha / (r**5)) * (1 - 5 * (h**2) / (r**2)) * (x2_prior - position_B[0])
+    vx2_post = vx2_prior + (ax2 * time_step)
+    x2_post  = x2_prior + (vx2_post  * time_step)
 
-inputs = np.array([df['x2'], df['vx2']])
-initial_guesses = [6, 9]
+    ay2      = -beta * vy2_prior + (alpha / (r**5)) * (1 - 5 * (h**2) / (r**2)) * (y2_prior - position_B[1])
+    vy2_post = vy2_prior + (ay2 * time_step)
+    y2_post  = y2_prior + (vy2_post  * time_step)
 
-try:
-    optimized_params, covariance = curve_fit(
-        objective_function,
-        inputs,
-        df['x2'],
-        p0=initial_guesses
-    )
-    print("Optimized parameters:", optimized_params)
-except Exception as e:
-    print("Error during curve fitting:", e)
+    return x2_post, y2_post
+
+# Define the combined objective function
+def objective_function(inputs, alpha, beta):
+    params = [alpha, beta]
+    x2, y2, vx2, vy2 = inputs
+    x2_predicted, y2_predicted = state_space_model(params, x2[0:-1], y2[0:-1], vx2[0:-1], vy2[0:-1])
+
+    return np.concatenate([x2_predicted, y2_predicted])
+
+# inputs = np.array([df['x2'], df['y2'], df['vx2'], df['vy2']])
+# initial_guesses = [0.72, 1]
+
+# observed_posterior_positions = df.loc[1:, ['x2', 'y2']]
+# observed_posterior_positions = df.loc[1:, ['x2', 'y2']].values.flatten()
+
+# try:
+#     optimized_params, covariance = curve_fit(
+#         objective_function,
+#         inputs,
+#         observed_posterior_positions,
+#         p0=initial_guesses
+#     )
+
+#     print(
+#         "vertex: ", VERTEX, "\n",
+#         "action: ", ACTION, "\n",
+#         "segment_id: ", SEGMENT_ID, "\n",
+#         "initial parameters:", initial_guesses, "\n",
+#         "optimized parameters:", optimized_params
+#     )
+
+# except Exception as e:
+#     print("Error during curve fitting:", e)
+
+def perform_regression(df, initial_guesses=[0.72, 1]):
+    inputs = np.array([df['x2'], df['y2'], df['vx2'], df['vy2']])
+    initial_guesses = initial_guesses
+    observed_posterior_positions = df.loc[1:, ['x2', 'y2']].values.flatten()
+
+    try:
+        optimized_params, covariance = curve_fit(
+            objective_function,
+            inputs,
+            observed_posterior_positions,
+            p0=initial_guesses
+        )
+
+        print(
+            "vertex: ", VERTEX, "\n",
+            "action: ", ACTION, "\n",
+            "segment_id: ", SEGMENT_ID, "\n",
+            "initial parameters:", initial_guesses, "\n",
+            "optimized parameters:", optimized_params
+        )
+
+    except Exception as e:
+        print("Error during curve fitting:", e)
 
 ############################################################### SIMULATION ############################################################
 ############################################################### SIMULATION ############################################################
 ############################################################### SIMULATION ############################################################
 ############################################################### SIMULATION ############################################################
 
-time_step = 0.01
-alpha_opt, beta1_opt = [0.72, 5]
+# time_step = 0.001
+# alpha_opt, beta1_opt = optimized_params
 
-# # # Define the state-space model for the x position
-def sim_state_space_model_x(params, x2, vx2):
-    # mu_0 = 1.256e-6
-    # prescaler = 10
-    mu_0, prescaler = 1, 1
-    alpha, beta1 = params
-    r = np.sqrt((x2 - position_B[0])**2 + h**2)
-    ax2_pred = -beta1 * vx2 + ((mu_0 * prescaler * alpha) / r**5) * (1 - (5 * (h**2) / r**2)) * (x2 - position_B[0])
-    return ax2_pred
+# def sim_state_space_model(params, x2_prior, y2_prior, vx2_prior, vy2_prior):
+#     alpha, beta = params
+#     r = np.sqrt(((x2_prior - position_B[0])**2) + ((y2_prior - position_B[1])**2) + (h**2))
+#     ax2 = -beta * vx2_prior + (alpha / (r**5)) * (1 - 5 * (h**2) / (r**2)) * (x2_prior - position_B[0])
+#     ay2 = -beta * vy2_prior + (alpha / (r**5)) * (1 - 5 * (h**2) / (r**2)) * (y2_prior - position_B[1])
+#     return ax2, ay2
 
-# Simulation parameters  # Time step (adjust based on your data)
-num_steps = 500  # Number of steps in the simulation
+# # Simulation parameters  # Time step (adjust based on your data)
+# num_steps = 1500  # Number of steps in the simulation
 
-# Initial conditions
-x2_pred = position_A[0]  # Initial position
-vx2_pred = 0.0  # Initial velocity
-print(x2_pred, vx2_pred)
+# # Initial conditions
+# x2_pred, y2_pred   = position_A[0], position_A[1] 
+# vx2_pred, vy2_pred = 0.0, 0.0
+# print("start position: ", x2_pred, vx2_pred)
+# print("target end position: ", position_B[0], position_B[1])
 
-# Simulation loop using Euler method
-for i in range(num_steps):
-    ax2_pred  = sim_state_space_model_x([alpha_opt, beta1_opt], x2_pred, vx2_pred)
-    vx2_pred += ax2_pred * time_step
-    x2_pred  += vx2_pred * time_step
-    print(round(x2_pred, 3))
+# # Simulation loop using Euler method
+# for i in range(num_steps):
+#     ax2_pred, ay2_pred  = sim_state_space_model(
+#         [alpha_opt, beta1_opt], 
+#         x2_pred, vx2_pred, 
+#         y2_pred, vy2_pred
+#     )
+
+#     vx2_pred += ax2_pred * time_step
+#     x2_pred  += vx2_pred * time_step
+#     vy2_pred += ax2_pred * time_step
+#     y2_pred  += vx2_pred * time_step
+
+# print(
+#     "optimized params", optimized_params, "\n",
+#     "start positition: ", position_A[0], "\n",
+#     "target end position: ", position_B[0], "\n",
+#     "actual end position: ", x2_pred, y2_pred
+#     )
