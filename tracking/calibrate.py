@@ -24,11 +24,6 @@ time_step = 1 / frame_rate
 # Load csvs to df
 HOME = '/Users/akhilsankar/workspace/swarms/tracking'
 TARGET = 'regression_tracked_actions/tracked_segmented'
-VERTEX = 'ur'
-ACTION = f"{VERTEX}_to_center"
-SEGMENT_ID = "segment_1"
-
-POSITION_A, POSITION_B = [], []
 
 def generate_finite_differences(file_path):
     df = pd.read_csv(file_path)
@@ -117,16 +112,14 @@ results_df.to_csv(f"{HOME}/bare_optimized_params.csv", index=False)
 
 print("Optimized parameters saved to CSV.")
 
+
+################## BOX PLOT #############################################
+
 plt.figure(figsize=(10, 6))
 sns.boxplot(y=results_df['alpha'])
-
-# Set title and labels
 plt.title('Box Plot of Alpha')
 plt.ylabel('Alpha')
-
-# Zoom in on the y-axis
 plt.ylim(results_df['alpha'].min() - 0.1, results_df['alpha'].max() + 0.1)
-
 # Annotate min and max values
 min_val = round(results_df['alpha'].min(), 2)
 max_val = round(results_df['alpha'].max(), 2)
@@ -134,5 +127,4 @@ plt.annotate(f'Min: {min_val}', xy=(0, min_val), xytext=(0.1, min_val - 0.05),
              arrowprops=dict(facecolor='black', shrink=0.05))
 plt.annotate(f'Max: {max_val}', xy=(0, max_val), xytext=(0.1, max_val + 0.05),
              arrowprops=dict(facecolor='black', shrink=0.05))
-
 plt.show()
