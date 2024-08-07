@@ -125,7 +125,6 @@ for s in range(int(T/d)):
     sample_error = np.linalg.norm(prior_position - ref_posterior_position)
 
     if sample_error <= coil_range:
-        actual_input[sample_time_start : sample_time_end] = target_coil_idx #TODO: this line may only be for plotting purposes
         # sample_input = np.tile(driven_coils, (ticks_per_sample, 1)).T
         sample_input = np.tile(driven_coils, ticks_per_sample)
     else:
@@ -147,10 +146,23 @@ for s in range(int(T/d)):
 
         sample_input_1, sample_input_2 = np.zeros(num_coils, 1), np.zeros(num_coils, 1)
         
+        # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
         if np.linalg.norm(prior_position - xy_grid_cells[sample_input_2[1]]) <= coil_range:
-            pass
+            sample_input_1[shortest_path[1]] = MagForce
+            sample_input_2[shortest_path[2]] = MagForce
         else:
-            pass
+            sample_input_1[shortest_path[0]] = MagForce
+            sample_input_2[shortest_path[1]] = MagForce
+
+        sample_input_sequence = np.concatenate(
+            (
+                np.tile(sample_input_1, (ticks_per_sample // 2, 1)).T, 
+                np.tile(sample_input_2, (ticks_per_sample // 2, 1)).T
+            ), 
+            axis=1
+        )
+
+
 
 
 
