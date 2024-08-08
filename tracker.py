@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from multiprocessing import Queue
+from multiprocessing import Process, Queue
 from multiprocessing.managers import BaseManager
 import sys
 import pdb
@@ -11,10 +11,8 @@ QUEUE_PORT = 50000
 # Calibration and conversion constants
 MIN_X_PIX = 410
 MAX_X_PIX = 1340
-MIN_Y_PIX = 160
+MIN_Y_PIX = 157
 MAX_Y_PIX = 1080
-
-#TODO: convert to cm
 
 SIZE_IN_PIX_X = MAX_X_PIX - MIN_X_PIX
 SIZE_IN_PIX_Y = MAX_Y_PIX - MIN_X_PIX
@@ -35,16 +33,18 @@ upper_red = np.array([10, 10, 10])
 lower_yellow = np.array([0, 100, 100])
 upper_yellow = np.array([100, 255, 255])
 
-background_frame = None
-cap = cv2.VideoCapture(0)
-
 # Minimum and maximum contour area thresholds
 min_contour_area = 100
 max_contour_area = 10000
 
 class QueueManager(BaseManager): pass
+def get_queue():
+    return Queue()
 
 def track(queue):
+    background_frame = None
+    cap = cv2.VideoCapture(0)
+
     while True:
         _, frame = cap.read()
 
@@ -140,10 +140,27 @@ def track(queue):
     cv2.destroyAllWindows()
     cap.release()
 
-if __name__ == "__main__":
-    QueueManager.register('get_queue', callable=lambda: Queue())
-    manager = QueueManager(address=('', QUEUE_PORT), authkey=b'abcd1234')
-    manager.start()
+QueueManager.register('get_queue', callable=get_queue)
 
+def start_server():
+    manager = QueueManager(address=('', 50000), authkey=b'abcd1234')
+    server = manager.get_server()
+    print("Starting server...")
+    server.serve_forever()
+
+if __name__ == "__main__":
+    server_process = Process(target=start_server)
+    server_process.start()
+
+    time.sleep(2)
+
+    # Connect to the server and get the queue
+    manager = QueueManager(address=('localhost', 50000), authkey=b'abcd1234')
+    manager.connect()
     q = manager.get_queue()
+
+    # Run the tracker function
     track(q)
+
+    # Ensure server process terminates when done
+    server_process.join()
