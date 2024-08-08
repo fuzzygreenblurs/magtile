@@ -2,6 +2,8 @@ import numpy as np
 import networkx as nx
 import math
 import pdb
+import serial
+from actuator import Actuator
 from multiprocessing.managers import BaseManager
 
 QUEUE_PORT = 50000
@@ -14,16 +16,16 @@ def control(queue):
     # Define Constants
     ###################################
 
-    coil_range            = 3.048                    # magnetic force range: 3.048                           
+    COIL_RANGE            = 3.048                    # magnetic force range: 3.048                           
     MagForce              = 1                        # magnetic force multiplier: 1                          
     x_grid_size           = 15                       # grid dimensions for static dipoles (x-direction)
     y_grid_size           = 15                       # grid dimensions for static dipoles (y-direction)
     grid_spacing          = 2.159                    # spacing between static dipoles: 2.159 (in cm)                
     
     dt                    = 0.001                    # time step
-    T                     = 200                      # total time period
+    T                     = 200                      # total time period (s)
     vt                    = np.arange(0, T, dt)      # simulation time step vector
-    d                     = 0.06                     # camera sampling period
+    d                     = 0.0625                   # camera sampling period
     num_samples           = T / d                    # total number of sensor samples in the time period T 
     ticks_per_sample      = d/dt                     # time steps per sampling period
 
@@ -89,7 +91,7 @@ def control(queue):
                     A[neighbor_index, current_idx] = distance
 
     ###########################################
-    # Initialize Reference Signal
+    # Initialize Reference Signals
     ###########################################
 
     # kernel: just describes a single (non-repeating) unit
@@ -99,11 +101,14 @@ def control(queue):
 
     # use np.tile() to repeat the kernel arrays enough times to cover the total number of control steps
     ref_trajectory = np.tile(ref_trajectory_kernel_subscript, 1, int(np.ceil(T/d)))
-    expected_input = np.tile(expected_input_kernel_idx, int(np.ceil(T/d)))
+    expected_input_idx = np.tile(expected_input_kernel_idx, int(np.ceil(T/d)))
 
     # slice the repetitions to match the number of samples exactly (including the initial step)
     ref_trajectory = ref_trajectory[:, int((T/d) + 1)]
-    expected_input = expected_input[:, int((T/d) + 1)]
+
+    # this is just the target loop by idx: 
+    # [19, 20, 35, 49, 48, 33 | 19, 20, 35, 49, 48, 33 | 19, 20, 35, 49, 48, 33 | ... ]
+    expected_input_idx = expected_input_idx[:, int((T/d) + 1)]
 
     ###########################################
     # Control Loop
@@ -114,29 +119,21 @@ def control(queue):
     error        = np.zeros(len(vt))
 
     for s in range(int(T/d)):
-        sample_time_start = int(s * ticks_per_sample)
-        sample_time_end = int((s + 1) * ticks_per_sample)
-        sample_time_half = int((s + 0.5) * ticks_per_sample)
-
         # observed position at the start of the current sample interval
-        prior_position = np.array([x_disk[sample_time_start], y_disk[sample_time_start]])
+        prior_raw = queue.get()["yellow"]
+        prior_position = np.array([prior_raw[0], prior_raw[1]])
         
-        # target position at the end of the current sample interval
         ref_posterior_position = ref_trajectory[:, s + 1]
-
-        # set the input to the expected control signal for the target coil
-        target_coil_idx = expected_input[s+1]
-        driven_coils = np.zeros(num_coils)  # Coil vector
-        driven_coils[target_coil_idx] = 1
-
         sample_error = np.linalg.norm(prior_position - ref_posterior_position)
 
-        if sample_error <= coil_range:
-            # sample_input = np.tile(driven_coils, (ticks_per_sample, 1)).T
-            sample_input = np.tile(driven_coils, ticks_per_sample)
+        if sample_error <= COIL_RANGE:
+            # set the input to the expected control signal for the target coil
+            target_coil_idx = expected_input_idx[s+1]
+            target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
+            actuator.actuate_single(target_coil[0], target_coil[1])
         else:
             min_dist = math.inf
-            min_idx = 1
+            min_idx = 0
 
             # find the current closest coil in the grid
             for i in num_coils:
@@ -148,26 +145,20 @@ def control(queue):
 
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
-            shortest_path = nx.dijkstra_path(graph, min_idx, target_coil_idx)
-            input_sequence = shortest_path[::-1]
+            sample_input_sequence = nx.dijkstra_path(graph, min_idx, target_coil_idx)
+            sample_input_sequence = sample_input_sequence[::-1]
 
             sample_input_1, sample_input_2 = np.zeros(num_coils, 1), np.zeros(num_coils, 1)
             
             # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
-            if np.linalg.norm(prior_position - xy_grid_cells[sample_input_2[1]]) <= coil_range:
-                sample_input_1[shortest_path[1]] = MagForce
-                sample_input_2[shortest_path[2]] = MagForce
+            if np.linalg.norm(prior_position - xy_grid_cells[sample_input_sequence[1]]) <= COIL_RANGE:
+                target_coil_idx = sample_input_sequence[1]
+                target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
+                actuator.actuate_single(target_coil[0], target_coil[1])
             else:
-                sample_input_1[shortest_path[0]] = MagForce
-                sample_input_2[shortest_path[1]] = MagForce
-
-            sample_input_sequence = np.concatenate(
-                (
-                    np.tile(sample_input_1, (ticks_per_sample // 2, 1)).T, 
-                    np.tile(sample_input_2, (ticks_per_sample // 2, 1)).T
-                ), 
-                axis=1
-            )
+                target_coil_idx = sample_input_sequence[0]
+                target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
+                actuator.actuate_single(target_coil[0], target_coil[1])
 
 if __name__ == "__main__":
     QueueManager.register('get_queue')
@@ -176,7 +167,32 @@ if __name__ == "__main__":
 
     q = manager.get_queue()
 
-    control(q)
+    port = "/dev/cu.usbmodem11301"  # Update with the correct port for your setup
+    try:
+        with Actuator(port) as actuator:
+            try:
+                # Read dimensions
+                width = actuator.read_width()
+                height = actuator.read_height()
+                print(f"Width: {width}, Height: {height}")
+
+                addresses = actuator.scan_addresses()
+                print(f"Addresses: {addresses}")
+
+                # Store configuration
+                actuator.store_config()
+
+                try:
+                    control(q, actuator)
+                except KeyboardInterrupt:
+                    actuator.stop_all()
+
+            except Exception as e:
+                print(f"An error occurred during operations: {e}")
+    except serial.SerialException:
+        print("Failed to connect to the Arduino.")
+
+
 
 
 
