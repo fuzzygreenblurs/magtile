@@ -102,26 +102,13 @@ def control(sock, actuator):
         if error <= FIELD_RANGE:
             actuator.actuate_single(target_coil[0], target_coil[1])
         else:
-            # find the current closest coil in the grid
-            min_distance = math.inf
-            min_idx = 0
-            for i in range(num_coils):
-                candidate_coordinates = get_raw_coordinates(i)
-                distance = np.linalg.norm(current_position - candidate_coordinates)
-                if(distance < min_distance):
-                    min_distance = distance
-                    min_idx = i
-
-            target_coil = calc_grid_coordinates(min_idx)
-
-
-            actuator.actuate_single(target_coil[0], target_coil[1])
+            closest_idx, closest_coil = find_closest_coil(current_position)
+            actuator.actuate_single(closest_coil[0], closest_coil[1])
 
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
-            shortest_path = nx.dijkstra_path(graph, min_idx, ref_position_idx)
-            shortest_path = shortest_path[::-1]
-
+            shortest_path = nx.dijkstra_path(graph, closest_idx, ref_position_idx)
+    
             # starting from the next iteration, follow the newly calculated shortest path:
             # this step replaces the current plan with the new shortest path plan until it reaches the pre-defined target coil
             input_trajectory[i + 1: ((i + 1) + len(shortest_path))] = shortest_path
@@ -163,15 +150,16 @@ def get_raw_coordinates(index):
 
 def find_closest_coil(current_position):
     min_distance = math.inf
-    min_idx = 0
+    closest_idx = 0
     for i in range(num_coils):
         candidate_coordinates = get_raw_coordinates(i)
         distance = np.linalg.norm(current_position - candidate_coordinates)
         if(distance < min_distance):
             min_distance = distance
-            min_idx = i
+            closest_idx = i
 
-    return calc_grid_coordinates(min_idx)
+    closest_coil = calc_grid_coordinates(closest_idx)
+    return closest_idx, closest_coil
 
 if __name__ == '__main__':
     server_address = (SOCKET_DOMAIN, SOCKET_PORT)
