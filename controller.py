@@ -1,14 +1,12 @@
+import json
 import numpy as np 
 import networkx as nx
 import math
 import pdb
+import time 
 import serial
+import socket
 from actuator import Actuator
-from multiprocessing.managers import BaseManager
-
-QUEUE_PORT = 50000
-
-class QueueManager(BaseManager): pass
 
 def control(queue):
 
@@ -160,37 +158,44 @@ def control(queue):
                 target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
                 actuator.actuate_single(target_coil[0], target_coil[1])
 
-if __name__ == "__main__":
-    QueueManager.register('get_queue')
-    manager = QueueManager(address=('localhost', QUEUE_PORT), authkey=b'abcd1234')
-    manager.connect()
+def control_test(sock):
+    while True:
+        data, _ = sock.recvfrom(1024)  # Buffer size is 1024 bytes
+        payload = json.loads(data.decode())
+        print("yellow x:", payload["yellow"][0], "yellow y:", payload["yellow"][1])
 
-    q = manager.get_queue()
+if __name__ == '__main__':
+    server_address = ('localhost', 65432)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        sock.bind(server_address)
+        control_test(sock)
 
-    port = "/dev/cu.usbmodem11301"  # Update with the correct port for your setup
-    try:
-        with Actuator(port) as actuator:
-            try:
-                # Read dimensions
-                width = actuator.read_width()
-                height = actuator.read_height()
-                print(f"Width: {width}, Height: {height}")
 
-                addresses = actuator.scan_addresses()
-                print(f"Addresses: {addresses}")
 
-                # Store configuration
-                actuator.store_config()
+    # port = "/dev/cu.usbmodem11301"  # Update with the correct port for your setup
+    # try:
+    #     with Actuator(port) as actuator:
+    #         try:
+    #             # Read dimensions
+    #             width = actuator.read_width()
+    #             height = actuator.read_height()
+    #             print(f"Width: {width}, Height: {height}")
 
-                try:
-                    control(q, actuator)
-                except KeyboardInterrupt:
-                    actuator.stop_all()
+    #             addresses = actuator.scan_addresses()
+    #             print(f"Addresses: {addresses}")
 
-            except Exception as e:
-                print(f"An error occurred during operations: {e}")
-    except serial.SerialException:
-        print("Failed to connect to the Arduino.")
+    #             # Store configuration
+    #             actuator.store_config()
+
+    #             try:
+    #                 control(q, actuator)
+    #             except KeyboardInterrupt:
+    #                 actuator.stop_all()
+
+    #         except Exception as e:
+    #             print(f"An error occurred during operations: {e}")
+    # except serial.SerialException:
+    #     print("Failed to connect to the Arduino.")
 
 
 
