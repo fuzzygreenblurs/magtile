@@ -93,39 +93,43 @@ def control(sock, actuator):
     ###########################################
 
     for i in range(num_samples):
-        current_position = read_position(sock)    
-        ref_position = get_raw_coordinates(ref_trajectory[i + 1])
-        error = np.linalg.norm(ref_position - current_position)
+        current_position = read_position(sock)
+        ref_position_idx = ref_trajectory[i + 1]
+        error = np.linalg.norm(get_raw_coordinates(ref_position_idx) - current_position)
         
         target_coil = calc_grid_coordinates(input_trajectory[i + 1])
 
         if error <= FIELD_RANGE:
             actuator.actuate_single(target_coil[0], target_coil[1])
         else:
-            min_dist = math.inf
-            min_idx = 0
-
             # find the current closest coil in the grid
-            for i in num_coils:
-                xy_cell = xy_grid_cells[i]
-                target_coil = np.linalg.norm(prior_position - xy_cell)
-                if (target_coil < min_dist):
-                    min_dist = target_coil
+            min_distance = math.inf
+            min_idx = 0
+            for i in range(num_coils):
+                candidate_coordinates = get_raw_coordinates(i)
+                distance = np.linalg.norm(current_position - candidate_coordinates)
+                if(distance < min_distance):
+                    min_distance = distance
                     min_idx = i
+
+            target_coil = calc_grid_coordinates(min_idx)
+
 
             actuator.actuate_single(target_coil[0], target_coil[1])
 
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
-            shortest_path = nx.dijkstra_path(graph, min_idx, target_coil_idx)
+            shortest_path = nx.dijkstra_path(graph, min_idx, ref_position_idx)
             shortest_path = shortest_path[::-1]
 
             # starting from the next iteration, follow the newly calculated shortest path:
             # this step replaces the current plan with the new shortest path plan until it reaches the pre-defined target coil
             input_trajectory[i + 1: ((i + 1) + len(shortest_path))] = shortest_path
+
+            current_position = read_position(sock)
             
             # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
-            if np.linalg.norm(prior_position - xy_grid_cells[input_trajectory[1]]) <= FIELD_RANGE:
+            if np.linalg.norm(current_position - xy_grid_cells[input_trajectory[1]]) <= FIELD_RANGE:
                 target_coil_idx = input_trajectory[1]
                 target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
                 actuator.actuate_single(target_coil[0], target_coil[1])
@@ -156,6 +160,18 @@ def calc_raw_coordinates(row, col):
 def get_raw_coordinates(index):
     grid_coordinates = calc_grid_coordinates(index)
     return calc_raw_coordinates(grid_coordinates[0], grid_coordinates[1])
+
+def find_closest_coil(current_position):
+    min_distance = math.inf
+    min_idx = 0
+    for i in range(num_coils):
+        candidate_coordinates = get_raw_coordinates(i)
+        distance = np.linalg.norm(current_position - candidate_coordinates)
+        if(distance < min_distance):
+            min_distance = distance
+            min_idx = i
+
+    return calc_grid_coordinates(min_idx)
 
 if __name__ == '__main__':
     server_address = (SOCKET_DOMAIN, SOCKET_PORT)
