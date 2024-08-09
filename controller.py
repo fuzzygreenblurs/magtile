@@ -114,9 +114,9 @@ def control(sock, actuator):
             input_trajectory[i + 1: ((i + 1) + len(shortest_path))] = shortest_path
 
             current_position = read_position(sock)
-            
+
             # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
-            if np.linalg.norm(current_position - xy_grid_cells[input_trajectory[1]]) <= FIELD_RANGE:
+            if np.linalg.norm(current_position - get_raw_coordinates(input_trajectory[1])) <= FIELD_RANGE:
                 target_coil_idx = input_trajectory[1]
                 target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
                 actuator.actuate_single(target_coil[0], target_coil[1])
@@ -124,6 +124,9 @@ def control(sock, actuator):
                 target_coil_idx = input_trajectory[0]
                 target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
                 actuator.actuate_single(target_coil[0], target_coil[1])
+
+        time.sleep(1)
+            
 
 def control_test(sock):
     while True:
