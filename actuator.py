@@ -24,14 +24,15 @@ class Actuator:
         else:
             raise ValueError(f"Unexpected response: {response}")
         
-    def actuate_single(self, row, col, dc=4095):    
+    def actuate_single(self, row, col, dc=4095):
         self.stop_all()
         self.set_power(row, col, dc)
         print(f"Set power for coil_id: ({row}, {col}) to {(dc/4095) * 100}%")
 
     def stop_all(self):
-        for row in range(3):
-            for col in range(3, 5):
+        print(f"stopping all coils...")
+        for row in range(6):
+            for col in range(6):
                 self.set_power(row, col, 0)
 
     def read_width(self):
