@@ -84,7 +84,6 @@ for i in range(GRID_WIDTH):
 ###########################################
 
 def control(sock, actuator):
-    
     ref_trajectory = np.tile(TARGET_PATH, num_samples)
     input_trajectory = ref_trajectory.copy()
 
@@ -94,12 +93,11 @@ def control(sock, actuator):
 
     for i in range(num_samples):
         current_position = read_position(sock)
-        ref_position_idx = ref_trajectory[i + 1]
+        ref_position_idx = input_trajectory[i]
         error = np.linalg.norm(get_raw_coordinates(ref_position_idx) - current_position)
-        
-        target_coil = calc_grid_coordinates(input_trajectory[i + 1])
 
         if error <= FIELD_RANGE:
+            target_coil = calc_grid_coordinates(ref_position_idx)
             actuator.actuate_single(target_coil[0], target_coil[1])
         else:
             closest_idx, closest_coil = find_closest_coil(current_position)
@@ -108,26 +106,22 @@ def control(sock, actuator):
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
             shortest_path = nx.dijkstra_path(graph, closest_idx, ref_position_idx)
+            current_position = read_position(sock)
+
+            print("shortest path: ", shortest_path, "first coil: ", shortest_path[0], "target position: ", get_raw_coordinates(shortest_path[0]))
     
             # starting from the next iteration, follow the newly calculated shortest path:
             # this step replaces the current plan with the new shortest path plan until it reaches the pre-defined target coil
-            input_trajectory[i + 1: ((i + 1) + len(shortest_path))] = shortest_path
-
-            current_position = read_position(sock)
-
             # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
-            if np.linalg.norm(current_position - get_raw_coordinates(input_trajectory[1])) <= FIELD_RANGE:
-                target_coil_idx = input_trajectory[1]
-                target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
-                actuator.actuate_single(target_coil[0], target_coil[1])
+            if np.linalg.norm(current_position - get_raw_coordinates(shortest_path[1])) <= FIELD_RANGE:
+                shortest_path = shortest_path[1:]
+                input_trajectory[i+1: (i+1) + len(shortest_path)] = shortest_path
+                print("within field range of 2nd index: ", input_trajectory[1], "target position: ", get_raw_coordinates(input_trajectory[1]))
             else:
-                target_coil_idx = input_trajectory[0]
-                target_coil = np.unravel_index(target_coil_idx, x_grid.shape)
-                actuator.actuate_single(target_coil[0], target_coil[1])
+                print("not within field range of 2nd index: ", input_trajectory[1], "target position: ", get_raw_coordinates(input_trajectory[1]))
+                input_trajectory[i+1: (i+1) + len(shortest_path)] = shortest_path
 
-        time.sleep(1)
             
-
 def control_test(sock):
     while True:
         data, _ = sock.recvfrom(1024)  # Buffer size is 1024 bytes
@@ -175,10 +169,10 @@ if __name__ == '__main__':
                     # Read dimensions
                     width = actuator.read_width()
                     height = actuator.read_height()
-                    print(f"Width: {width}, Height: {height}")
+                    # print(f"Width: {width}, Height: {height}")
 
                     addresses = actuator.scan_addresses()
-                    print(f"Addresses: {addresses}")
+                    # print(f"Addresses: {addresses}")
 
                     # Store configuration
                     actuator.store_config()
