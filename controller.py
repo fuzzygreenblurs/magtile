@@ -1,3 +1,4 @@
+import redis
 import json
 import numpy as np 
 import networkx as nx
@@ -12,16 +13,24 @@ from actuator import Actuator
 # Define Constants
 ###################################
 ACTUATOR_PORT = "/dev/cu.usbmodem11301"
-SOCKET_DOMAIN = "localhost"
-SOCKET_PORT   = 65432
+# SOCKET_DOMAIN = "localhost"
+# SOCKET_PORT   = 65432
+REDIS_CLIENT = redis.StrictRedis(host='localhost', port=6379, db=0)
+CHANNEL = "positions"
+PUBSUB = REDIS_CLIENT.pubsub()
+PUBSUB.subscribe(CHANNEL)
+
+r = redis.Redis(host='localhost', port=6379, db=0)
+stream_name = 'stream_positions'
+
 
 GRID_WIDTH            = 15                                                      # grid dimensions for static dipoles (x-direction)
 FIELD_RANGE           = 3.048                                                   # magnetic force range: 3.048                           
 COIL_SPACING          = 2.159                                                   # spacing between static dipoles: 2.159 (in cm)                
 
-ref_trajectory_period = 200                                                     # total time period (s)
-sampling_period       = 0.0625                                                  # camera sampling period
-num_samples           = int(np.ceil(ref_trajectory_period / sampling_period))
+REF_TRAJECTORY_PERIOD = 200                                                     # total time period (s)
+SAMPLING_PERIOD       = 0.0625                                                  # camera sampling period
+NUM_SAMPLES           = int(np.ceil(REF_TRAJECTORY_PERIOD / SAMPLING_PERIOD))
 
 ################################
 # Define Target Path By Position Index
@@ -83,31 +92,96 @@ for i in range(GRID_WIDTH):
 # Initialize Reference Signals
 ###########################################
 
+def wait_for_msg():
+    while True:
+        message = PUBSUB.get_message()
+        if message and message['type'] == 'message':
+            data = json.loads(message['data'])
+            if data:
+                return data['yellow']
+        time.sleep(0.1)  # Small delay to prevent CPU overuse
+
+# Initialize a variable to store the last message ID
+last_message_id = '0'
+
+def get_latest_data():
+    # Get the most recent entry in the stream
+    messages = r.xrevrange(stream_name, count=1)
+    
+    if messages:
+        # Unpack the message
+        message_id, message = messages[0]
+        
+        # Decode and return the message content
+        timestamp = message[b'timestamp'].decode()
+        yellow_pos = json.loads(message[b'yellow'].decode())
+        red_pos = json.loads(message[b'red'].decode())
+        return {
+            "timestamp": timestamp,
+            "yellow": yellow_pos,
+            "red": red_pos
+        }
+    else:
+        return None
+
+
+def osc_test(actuator):
+    while True:
+        print("performing osc test") 
+
+        print("----- expected: 0, 0 --------")
+        actuator.actuate_single(7, 7)
+        time.sleep(0.5)  # Ensure time for message to be published
+        latest_data = get_latest_data()
+        print(latest_data)
+
+        actuator.stop_all()
+        time.sleep(0.5)
+
+        print("----- expected: 0, 2.6 --------")
+        actuator.actuate_single(6, 7)
+        time.sleep(0.5)  # Ensure time for message to be published
+        latest_data = get_latest_data()
+        print(latest_data)
+
+        actuator.stop_all()
+        time.sleep(0.5)
+
+
+
 def control(sock, actuator):
-    ref_trajectory = np.tile(TARGET_PATH, num_samples)
+    ref_trajectory = np.tile(TARGET_PATH, NUM_SAMPLES)
     input_trajectory = ref_trajectory.copy()
 
     ###########################################
     # Control Loop
     ###########################################
 
-    for i in range(num_samples):
+    for i in range(NUM_SAMPLES):
+        print(f"\n--------------------")
         current_position = read_position(sock)
+        print(f"iteration: {i}")
+        print("input_trajectory: ", input_trajectory[0:15])
+        print("current_position: ", current_position)
         ref_position_idx = input_trajectory[i]
         error = np.linalg.norm(get_raw_coordinates(ref_position_idx) - current_position)
 
         if error <= FIELD_RANGE:
             target_coil = calc_grid_coordinates(ref_position_idx)
+            print(f"error within field range. actuate target coil {ref_position_idx} ({target_coil[0]}, {target_coil[1]})")
             actuator.actuate_single(target_coil[0], target_coil[1])
+            time.sleep(SAMPLING_PERIOD)
         else:
             closest_idx, closest_coil = find_closest_coil(current_position)
+            print(f"error outside field range. actuate closest coil {closest_idx} ({closest_coil[0]}, {closest_coil[1]})")
             actuator.actuate_single(closest_coil[0], closest_coil[1])
+            time.sleep(SAMPLING_PERIOD)
 
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
             shortest_path = nx.dijkstra_path(graph, closest_idx, ref_position_idx)
             current_position = read_position(sock)
-
+            
             print("shortest path: ", shortest_path, "first coil: ", shortest_path[0], "target position: ", get_raw_coordinates(shortest_path[0]))
     
             # starting from the next iteration, follow the newly calculated shortest path:
@@ -121,19 +195,21 @@ def control(sock, actuator):
                 print("not within field range of 2nd index: ", input_trajectory[1], "target position: ", get_raw_coordinates(input_trajectory[1]))
                 input_trajectory[i+1: (i+1) + len(shortest_path)] = shortest_path
 
-            
-def control_test(sock):
-    while True:
-        data, _ = sock.recvfrom(1024)  # Buffer size is 1024 bytes
-        payload = json.loads(data.decode())
-        print("yellow x:", payload["yellow"][0], "yellow y:", payload["yellow"][1])
+        current_position = read_position(sock)
+        print("current position: ", current_position)
+        print("updated input trajectory: ", input_trajectory[0:15])
+        print("stop all coils at end of iteration...")
+        actuator.stop_all()
+        # time.sleep(2)
 
 
 def read_position(sock):
-    data, _ = sock.recvfrom(1024)  # Buffer size is 1024 bytes
+    data, address = sock.recvfrom(1024)
     payload = json.loads(data.decode())
+    print(f"Received {payload["yellow"]} from {address}")
+
     # print("yellow x:", payload["yellow"][0], "yellow y:", payload["yellow"][1])
-    return np.array(payload["yellow"])
+    return payload["yellow"]
 
 def calc_grid_coordinates(index):
     return np.unravel_index(index, x_grid.shape)
@@ -159,31 +235,27 @@ def find_closest_coil(current_position):
     return closest_idx, closest_coil
 
 if __name__ == '__main__':
-    server_address = (SOCKET_DOMAIN, SOCKET_PORT)
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(server_address)
-
+    with Actuator(ACTUATOR_PORT) as actuator:
         try:
-            with Actuator(ACTUATOR_PORT) as actuator:
-                try:
-                    # Read dimensions
-                    width = actuator.read_width()
-                    height = actuator.read_height()
-                    # print(f"Width: {width}, Height: {height}")
+            # Read dimensions
+            width = actuator.read_width()
+            height = actuator.read_height()
+            addresses = actuator.scan_addresses()
+            actuator.store_config()
 
-                    addresses = actuator.scan_addresses()
-                    # print(f"Addresses: {addresses}")
+            try:
+                # test_read_position(sock)
+                osc_test(actuator)
+                # read_redis_position()
+                # control(sock, actuator)
+                # while True:
+                    # test_read_position()
 
-                    # Store configuration
-                    actuator.store_config()
+            except KeyboardInterrupt:
+                actuator.stop_all()
 
-                    try:
-                        control(sock, actuator)
-                    except KeyboardInterrupt:
-                        actuator.stop_all()
-
-                except Exception as e:
-                    print(f"An error occurred during operations: {e}")
+        except Exception as e:
+            print(f"An error occurred during operations: {e}")
         except serial.SerialException:
             print("Failed to connect to the Arduino.")
 

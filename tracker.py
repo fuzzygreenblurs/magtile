@@ -1,3 +1,4 @@
+import redis
 import cv2
 import json
 import numpy as np
@@ -7,7 +8,11 @@ import time
 
 # Socket
 SERVER_ADDR = ('localhost', 65432)
+REDIS_CLIENT = redis_client = redis.StrictRedis(host='localhost', port=6379, db=0)
+CHANNEL = "positions"
 
+r = redis.Redis(host='localhost', port=6379, db=0)
+stream_name = 'stream_positions'
 
 # Calibration and conversion constants
 MIN_X_PIX = 410
@@ -32,7 +37,7 @@ upper_yellow = np.array([100, 255, 255])
 min_contour_area = 100
 max_contour_area = 10000
 
-def publish_position(socket):
+def publish_position():
     background_frame = None
     cap = cv2.VideoCapture(0)
 
@@ -96,14 +101,24 @@ def publish_position(socket):
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
             cv2.putText(frame, "Yellow object detected", (x, y - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
 
-        # publish latest positoin
+        # # publish latest positoin
+        # payload = json.dumps({
+        #     "timestamp": time.time(),
+        #     "yellow": yellow_pos,
+        #     "red": red_pos
+        # })
+
         payload = {
-            "timestamp": time.time(),
-            "yellow": yellow_pos,
-            "red": red_pos
+            "timestamp": str(time.time()),  # Store as a string
+            "yellow": json.dumps(yellow_pos),  # Serialize complex data as a string
+            "red": json.dumps(red_pos)  # Serialize complex data as a string
         }
 
-        sock.sendto(json.dumps(payload).encode(), SERVER_ADDR)
+        # Add the payload to the Redis Stream
+        if payload:
+            r.xadd("stream_positions", payload)
+        # time.sleep(1)  # Simulate delay
+        # REDIS_CLIENT.publish("positions", json.dumps(payload))
 
         # print and display latest position and frame for diagnostics
         sys.stdout.write(f"\r Red: ({red_pos[0]}, {red_pos[1]}), Yellow: ({yellow_pos[0]}, {yellow_pos[1]})")
@@ -119,5 +134,4 @@ def publish_position(socket):
     
 
 if __name__ == "__main__":
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            publish_position(sock)
+    publish_position()
