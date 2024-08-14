@@ -26,9 +26,10 @@ stream_name = 'stream_positions'
 
 GRID_WIDTH            = 15                                                      # grid dimensions for static dipoles (x-direction)
 # FIELD_RANGE           = 4                                                     # magnetic force range: 3.048                           
-FIELD_RANGE           = 3.048                                                   # magnetic force range: 3.048                           
+FIELD_RANGE           = 3.1                                                     # magnetic force range: 3.048                           
 COIL_SPACING          = 2.159                                                   # spacing between static dipoles: 2.159 (in cm)                
-COERSION_THRESHOLD    = 0.762                                                   # anything within 0.3 inches of the coil radius can be coerced to coil centroid position
+COERSION_THRESHOLD_IN = 0.4                                                     # anything within 0.3 inches of the coil radius can be coerced to coil centroid position
+COERSION_THRESHOLD    = COERSION_THRESHOLD_IN * 2.54                            # anything within 0.3 inches of the coil radius can be coerced to coil centroid position
 
 REF_TRAJECTORY_PERIOD = 200                                                     # total time period (s)
 SAMPLING_PERIOD       = 0.0625                                                  # camera sampling period
@@ -39,6 +40,7 @@ NUM_SAMPLES           = int(np.ceil(REF_TRAJECTORY_PERIOD / SAMPLING_PERIOD))
 # Define Target Path By Position Index
 ################################
 TARGET_PATH = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
+# TARGET_PATH = [112, 97, 81, 80, 94, 109, 125, 126]
 # TARGET_PATH = [19, 20, 35, 49, 48, 33]
 
 ###########################################
@@ -139,6 +141,22 @@ def read_latest_position():
 #         actuator.actuate_single(target_coil[0], target_coil[1])
 #         time.sleep(1)
 
+def test_osc(actuator):
+    while True:
+        idx_a, idx_b = 80, 94
+        target_coil_a = calc_grid_coordinates(idx_a)
+        raw_a  = get_raw_coordinates(idx_a)
+        print(f"actuating {target_coil_a} at {raw_a}")
+        actuator.actuate_single(target_coil_a[0], target_coil_a[1])
+        time.sleep(1)
+        
+        target_coil_b = calc_grid_coordinates(idx_b)
+        raw_b  = get_raw_coordinates(idx_b)
+        print(f"actuating {target_coil_b} at {raw_b}")
+        actuator.actuate_single(target_coil_b[0], target_coil_b[1])
+        time.sleep(1)
+
+
 def to_in(cm):
     return round(cm * 0.393701, 2)
 
@@ -164,8 +182,9 @@ def control(actuator):
 
         error = np.linalg.norm(get_raw_coordinates(ref_position_idx) - current_position)
         raw = get_raw_coordinates(ref_position_idx)
-        print(f"ref_position_idx: {ref_position_idx}, cm: ({round(raw[0], 3)}, {round(raw[1], 3)}), in: ({to_in(raw[0]), to_in(raw[1])})")
         print(f"current position cm: ({current_position[0]}, {current_position[1]}), in: ({to_in(current_position[0])}, {to_in(current_position[1])})")
+        print(f"ref_position_idx: {ref_position_idx}, cm: ({round(raw[0], 3)}, {round(raw[1], 3)}), in: ({to_in(raw[0]), to_in(raw[1])})")
+        print(f"error: {error}")
 
         if error <= FIELD_RANGE:
             target_coil = calc_grid_coordinates(ref_position_idx)
@@ -218,6 +237,7 @@ def coerce(coil_idx, current_position):
     '''
     coil_position = get_raw_coordinates(coil_idx)
     if np.linalg.norm(coil_position - np.array(current_position)) <= COERSION_THRESHOLD:
+        print(f"coercing... new position should be: {coil_position}")
         return coil_position
     else:
         return current_position
@@ -262,6 +282,7 @@ if __name__ == '__main__':
             try:
                 control(actuator)
                 # open_loop(actuator)
+                # test_osc(actuator)
 
             except KeyboardInterrupt:
                 actuator.stop_all()
