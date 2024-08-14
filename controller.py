@@ -12,7 +12,7 @@ from actuator import Actuator
 ###################################
 # Define Constants
 ###################################
-ACTUATOR_PORT = "/dev/cu.usbmodem11301"
+ACTUATOR_PORT = "/dev/cu.usbmodem21301"
 # SOCKET_DOMAIN = "localhost"
 # SOCKET_PORT   = 65432
 REDIS_CLIENT = redis.StrictRedis(host='localhost', port=6379, db=0)
@@ -25,17 +25,21 @@ stream_name = 'stream_positions'
 
 
 GRID_WIDTH            = 15                                                      # grid dimensions for static dipoles (x-direction)
+# FIELD_RANGE           = 4                                                     # magnetic force range: 3.048                           
 FIELD_RANGE           = 3.048                                                   # magnetic force range: 3.048                           
 COIL_SPACING          = 2.159                                                   # spacing between static dipoles: 2.159 (in cm)                
+COERSION_THRESHOLD    = 0.762                                                   # anything within 0.3 inches of the coil radius can be coerced to coil centroid position
 
 REF_TRAJECTORY_PERIOD = 200                                                     # total time period (s)
 SAMPLING_PERIOD       = 0.0625                                                  # camera sampling period
 NUM_SAMPLES           = int(np.ceil(REF_TRAJECTORY_PERIOD / SAMPLING_PERIOD))
+# TARGET_PATH           = [112, 97, 81, 80, 94, 109, 125, 126]
 
 ################################
 # Define Target Path By Position Index
 ################################
-TARGET_PATH = [19, 20, 35, 49, 48, 33]
+TARGET_PATH = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
+# TARGET_PATH = [19, 20, 35, 49, 48, 33]
 
 ###########################################
 # Generate Grid for Static Dipoles (Coils)
@@ -88,6 +92,7 @@ for i in range(GRID_WIDTH):
                 A[current_idx, neighbor_index] = distance
                 A[neighbor_index, current_idx] = distance
 
+
 ###########################################
 # Initialize Reference Signals
 ###########################################
@@ -99,12 +104,12 @@ def wait_for_msg():
             data = json.loads(message['data'])
             if data:
                 return data['yellow']
-        time.sleep(0.1)  # Small delay to prevent CPU overuse
+        # time.sleep(0.1)  # Small delay to prevent CPU overuse
 
 # Initialize a variable to store the last message ID
 last_message_id = '0'
 
-def get_latest_data():
+def read_latest_position():
     # Get the most recent entry in the stream
     messages = r.xrevrange(stream_name, count=1)
     
@@ -123,96 +128,105 @@ def get_latest_data():
         }
     else:
         return None
+    
 
+# OL_TARGET_PATH = [112, 97, 81, 80, 94, 109, 125, 126]    
+# def open_loop(actuator):
+#     ref_trajectory = np.tile(OL_TARGET_PATH, NUM_SAMPLES)
+#     print("open loop control for ref trajectory: ", TEST_TARGET_PATH, "\n")
+#     for element in ref_trajectory:
+#         target_coil = calc_grid_coordinates(element)
+#         actuator.actuate_single(target_coil[0], target_coil[1])
+#         time.sleep(1)
 
-def osc_test(actuator):
-    while True:
-        print("performing osc test") 
+def to_in(cm):
+    return round(cm * 0.393701, 2)
 
-        print("----- expected: 0, 0 --------")
-        actuator.actuate_single(7, 7)
-        time.sleep(0.5)  # Ensure time for message to be published
-        latest_data = get_latest_data()
-        print(latest_data)
-
-        actuator.stop_all()
-        time.sleep(0.5)
-
-        print("----- expected: 0, 2.6 --------")
-        actuator.actuate_single(6, 7)
-        time.sleep(0.5)  # Ensure time for message to be published
-        latest_data = get_latest_data()
-        print(latest_data)
-
-        actuator.stop_all()
-        time.sleep(0.5)
-
-
-
-def control(sock, actuator):
+def control(actuator):
     ref_trajectory = np.tile(TARGET_PATH, NUM_SAMPLES)
     input_trajectory = ref_trajectory.copy()
 
     ###########################################
     # Control Loop
     ###########################################
+    # pdb.set_trace()
 
     for i in range(NUM_SAMPLES):
         print(f"\n--------------------")
-        current_position = read_position(sock)
         print(f"iteration: {i}")
-        print("input_trajectory: ", input_trajectory[0:15])
-        print("current_position: ", current_position)
+        print(f"input_trajectory: ", input_trajectory[0:17])
+        # print(f"input_trajectory: ", input_trajectory[i:i+17])
         ref_position_idx = input_trajectory[i]
+        current_position = read_latest_position()["yellow"]
+
+        if(i >= 1):
+            current_position = coerce(input_trajectory[i-1], current_position)
+
         error = np.linalg.norm(get_raw_coordinates(ref_position_idx) - current_position)
+        raw = get_raw_coordinates(ref_position_idx)
+        print(f"ref_position_idx: {ref_position_idx}, cm: ({round(raw[0], 3)}, {round(raw[1], 3)}), in: ({to_in(raw[0]), to_in(raw[1])})")
+        print(f"current position cm: ({current_position[0]}, {current_position[1]}), in: ({to_in(current_position[0])}, {to_in(current_position[1])})")
 
         if error <= FIELD_RANGE:
             target_coil = calc_grid_coordinates(ref_position_idx)
-            print(f"error within field range. actuate target coil {ref_position_idx} ({target_coil[0]}, {target_coil[1]})")
+            raw = get_raw_coordinates(ref_position_idx)
+            print(f"WITHIN range: target coil {ref_position_idx}", "cm: ", f"({raw[0]}, {raw[1]})",  "in: ", f"({to_in(raw[0]), to_in(raw[1])})")
             actuator.actuate_single(target_coil[0], target_coil[1])
-            time.sleep(SAMPLING_PERIOD)
+            # time.sleep(1)
         else:
             closest_idx, closest_coil = find_closest_coil(current_position)
-            print(f"error outside field range. actuate closest coil {closest_idx} ({closest_coil[0]}, {closest_coil[1]})")
+            raw = get_raw_coordinates(closest_idx)
+            print(f"OUTSIDE range: closest coil: {closest_idx}", "cm: ", f"({raw[0]}, {raw[1]})", "in: ", f"({to_in(raw[0])}, {to_in(raw[1])})")
             actuator.actuate_single(closest_coil[0], closest_coil[1])
-            time.sleep(SAMPLING_PERIOD)
+            # time.sleep(1)
 
             # compute shortest path to the reference trajectory: Djikstra
             graph = nx.from_numpy_array(A)
-            shortest_path = nx.dijkstra_path(graph, closest_idx, ref_position_idx)
-            current_position = read_position(sock)
+            shortest_path = nx.dijkstra_path(graph, closest_idx, ref_position_idx)[1:]
+            current_position = read_latest_position()["yellow"]
             
-            print("shortest path: ", shortest_path, "first coil: ", shortest_path[0], "target position: ", get_raw_coordinates(shortest_path[0]))
+            shortest_first = get_raw_coordinates(shortest_path[0])
+            print("shortest path: ", shortest_path, "next position cm: ", f"({round(shortest_first[0], 2)}, {round(shortest_first[1], 2)})", f"in: ({int(to_in(shortest_first[0]))}, {int(to_in(shortest_first[1]))})")
     
             # starting from the next iteration, follow the newly calculated shortest path:
             # this step replaces the current plan with the new shortest path plan until it reaches the pre-defined target coil
             # if the disk is within the radius of the second coil in the expected shortest path, skip directly to it
-            if np.linalg.norm(current_position - get_raw_coordinates(shortest_path[1])) <= FIELD_RANGE:
+            if len(shortest_path) == 1:
+                input_trajectory[i+1] = shortest_path[0]
+            elif np.linalg.norm(current_position - get_raw_coordinates(shortest_path[1])) <= FIELD_RANGE:
                 shortest_path = shortest_path[1:]
                 input_trajectory[i+1: (i+1) + len(shortest_path)] = shortest_path
-                print("within field range of 2nd index: ", input_trajectory[1], "target position: ", get_raw_coordinates(input_trajectory[1]))
+                print("within field range of 1st index: ", shortest_path[1], "next position: ", get_raw_coordinates(shortest_path[0]))
             else:
-                print("not within field range of 2nd index: ", input_trajectory[1], "target position: ", get_raw_coordinates(input_trajectory[1]))
+                print("within field range of 0th index: ", shortest_path[0], "next position: ", get_raw_coordinates(shortest_path[0]))
                 input_trajectory[i+1: (i+1) + len(shortest_path)] = shortest_path
 
-        current_position = read_position(sock)
-        print("current position: ", current_position)
+        current_position = read_latest_position()["yellow"]
         print("updated input trajectory: ", input_trajectory[0:15])
         print("stop all coils at end of iteration...")
         actuator.stop_all()
-        # time.sleep(2)
 
-
-def read_position(sock):
-    data, address = sock.recvfrom(1024)
-    payload = json.loads(data.decode())
-    print(f"Received {payload["yellow"]} from {address}")
-
-    # print("yellow x:", payload["yellow"][0], "yellow y:", payload["yellow"][1])
-    return payload["yellow"]
+def coerce(coil_idx, current_position):
+    '''
+    hacky solution: the position tracker has inherent error in the h_pos and v_pos.
+    thus, the disc can move to where the target_coil is positioned but have a different
+    measured position. 
+    
+    given the tight tolerance of the coil FIELD_RANGE:
+        if the current_position is within a threshold radius of a target_coil, consider 
+        the current_position to be at the (x, y) position of the centroid of the coil. 
+    '''
+    coil_position = get_raw_coordinates(coil_idx)
+    if np.linalg.norm(coil_position - np.array(current_position)) <= COERSION_THRESHOLD:
+        return coil_position
+    else:
+        return current_position
 
 def calc_grid_coordinates(index):
-    return np.unravel_index(index, x_grid.shape)
+    row = index // GRID_WIDTH
+    col = index % GRID_WIDTH
+    # print(f"calc grid coordinates: index: {index}, Row: {row}, Col: {col}")
+    return row, col
 
 def calc_raw_coordinates(row, col):
     return xy_grid_cells[row][col]
@@ -231,6 +245,8 @@ def find_closest_coil(current_position):
             min_distance = distance
             closest_idx = i
 
+    print(f"closest coil is: {round(min_distance, 2)} cm away")
+
     closest_coil = calc_grid_coordinates(closest_idx)
     return closest_idx, closest_coil
 
@@ -244,12 +260,8 @@ if __name__ == '__main__':
             actuator.store_config()
 
             try:
-                # test_read_position(sock)
-                osc_test(actuator)
-                # read_redis_position()
-                # control(sock, actuator)
-                # while True:
-                    # test_read_position()
+                control(actuator)
+                # open_loop(actuator)
 
             except KeyboardInterrupt:
                 actuator.stop_all()

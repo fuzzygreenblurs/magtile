@@ -15,16 +15,23 @@ r = redis.Redis(host='localhost', port=6379, db=0)
 stream_name = 'stream_positions'
 
 # Calibration and conversion constants
-MIN_X_PIX = 410
+MIN_X_PIX = 400
 MAX_X_PIX = 1340
-MIN_Y_PIX = 157
+MIN_Y_PIX = 160
 MAX_Y_PIX = 1080
 
-SIZE_IN_PIX_X = MAX_X_PIX - MIN_X_PIX
 SIZE_IN_CM = 30.1625
-PIX_TO_CM = SIZE_IN_CM / SIZE_IN_PIX_X
+SIZE_IN_PIX_X = MAX_X_PIX - MIN_X_PIX
+SIZE_IN_PIX_Y = MAX_Y_PIX - MIN_Y_PIX
+PIX_TO_CM_X = SIZE_IN_CM / SIZE_IN_PIX_X
+PIX_TO_CM_Y = SIZE_IN_CM / SIZE_IN_PIX_X
+WORLD_ORIGIN_TRANSLATION_X = SIZE_IN_PIX_X / 2
+WORLD_ORIGIN_TRANSLATION_Y = SIZE_IN_PIX_Y / 2
 
-WORLD_ORIGIN_TRANSLATION = SIZE_IN_PIX_X / 2
+# SIZE_IN_PIX_X = MAX_X_PIX - MIN_X_PIX
+# SIZE_IN_CM = 30.1625
+# PIX_TO_CM = SIZE_IN_CM / SIZE_IN_PIX_X
+# WORLD_ORIGIN_TRANSLATION = SIZE_IN_PIX_X / 2
 
 # Color thresholds for red and yellow in RGB
 lower_red = np.array([0, 0, 0])
@@ -80,8 +87,8 @@ def publish_position():
                 continue
 
             x, y, w, h = cv2.boundingRect(cnt)
-            h_pos = ((x + w / 2) - WORLD_ORIGIN_TRANSLATION) * PIX_TO_CM
-            v_pos = (-1 * ((y + h / 2) - WORLD_ORIGIN_TRANSLATION)) * PIX_TO_CM
+            h_pos = ((x + w / 2) - WORLD_ORIGIN_TRANSLATION_X) * PIX_TO_CM_X
+            v_pos = (-1 * ((y + h / 2) - WORLD_ORIGIN_TRANSLATION_Y)) * PIX_TO_CM_Y
             red_pos = [round(h_pos, 2), round(v_pos, 2)]
 
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
@@ -94,19 +101,12 @@ def publish_position():
                 continue
 
             x, y, w, h = cv2.boundingRect(cnt)
-            h_pos = ((x + w / 2) - WORLD_ORIGIN_TRANSLATION) * PIX_TO_CM
-            v_pos = (-1 * ((y + h / 2) - WORLD_ORIGIN_TRANSLATION)) * PIX_TO_CM
+            h_pos = ((x + w / 2) - WORLD_ORIGIN_TRANSLATION_X) * PIX_TO_CM_X
+            v_pos = (-1 * ((y + h / 2) - WORLD_ORIGIN_TRANSLATION_Y)) * PIX_TO_CM_Y
             yellow_pos = [round(h_pos, 2), round(v_pos, 2)]
 
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
             cv2.putText(frame, "Yellow object detected", (x, y - 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-
-        # # publish latest positoin
-        # payload = json.dumps({
-        #     "timestamp": time.time(),
-        #     "yellow": yellow_pos,
-        #     "red": red_pos
-        # })
 
         payload = {
             "timestamp": str(time.time()),  # Store as a string
@@ -117,11 +117,10 @@ def publish_position():
         # Add the payload to the Redis Stream
         if payload:
             r.xadd("stream_positions", payload)
-        # time.sleep(1)  # Simulate delay
-        # REDIS_CLIENT.publish("positions", json.dumps(payload))
 
         # print and display latest position and frame for diagnostics
-        sys.stdout.write(f"\r Red: ({red_pos[0]}, {red_pos[1]}), Yellow: ({yellow_pos[0]}, {yellow_pos[1]})")
+        sys.stdout.write(f"\r Yellow: ({yellow_pos[0]}, {yellow_pos[1]}), cm: ({to_in(yellow_pos[0])}, {to_in(yellow_pos[1])})")
+        # sys.stdout.write(f"\r Red: ({red_pos[0]}, {red_pos[1]}) , Yellow: ({yellow_pos[0]}, {yellow_pos[1]}), cm: ({to_in(yellow_pos[0])}, {to_in(yellow_pos[1])})")
         sys.stdout.flush()
         cv2.imshow('Frame', frame)
 
@@ -132,6 +131,9 @@ def publish_position():
     cv2.destroyAllWindows()
     cap.release()
     
+
+def to_in(cm):
+    return round(cm * 0.393701, 2)
 
 if __name__ == "__main__":
     publish_position()
