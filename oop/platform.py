@@ -1,6 +1,8 @@
+import json
+import time
 import numpy as np
 import networkx as nx
-import time
+from agent_color import AgentColor
 from constants import *
 '''
 all values are measured in centimeters [cm] unless inches [in] are explicitly specified in variable name
@@ -22,6 +24,18 @@ class Platform:
         self.grid_positions = self.populate_grid_positions()
         self.adjacency_matrix = self.initialize_adjacency_matrix()
         self.agents = []
+
+    def update_agent_positions(self):
+        messages = IPC_CLIENT.xrevrange(POSITIONS_STREAM, count=1)
+        
+        if messages:
+            _, message = messages[0]
+            for agent in self.agents:
+                color = f"b\'{agent.color}\'".encode('utf-8')
+                agent.update_position(json.loads(message[color].decode()))
+
+        else:
+            return None
 
     def calc_grid_coordinates(self, index):
         row = index // GRID_WIDTH
@@ -133,9 +147,9 @@ class Platform:
 
     def control(self):
         '''
-            - perform this for the desired duration of the experiment
-            - for each iteration, if all agents are outside the interference range with each other, follow the individual shortest path calculated for each agent
-            - if the agents fall within the interference range of each other, calculate a new shortest path without any interference
+            - for each iteration of the control loop:
+                - if all agents are outside the interference range with each other, follow the individual shortest path calculated for each agent
+                - if any agent falls within the interference range of another agent, calculate a new shortest path without any interference
         '''
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+import redis
 
 '''
     - all values are measured in centimeters [cm] unless inches [in] are explicitly specified in variable name
@@ -23,10 +24,8 @@ COERSION_THRESHOLD    = COERSION_THRESHOLD_IN * 2.54                            
 SAMPLING_PERIOD       = 0.1                                                     # time between camera readings [sec]
 
 # redis parameters
-REDIS_HOST = 'localhost'
-REDIS_PORT = 6379
-REDIS_DB = 0
-STREAM_NAME = 'stream_positions'
+IPC_CLIENT = redis.Redis(host='localhost', port=6379, db=0)
+POSITIONS_STREAM = 'stream_positions'
 
 # actuator parameters
 ACTUATOR_PORT = "/dev/cu.usbmodem21301"

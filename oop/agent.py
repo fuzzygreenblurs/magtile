@@ -46,35 +46,32 @@ class Agent:
         ref_position_idx = self.input_trajectory[self.current_index]
         return nx.dijkstra_path(graph, current_position_index, ref_position_idx)
 
-    def actuate(self, actuator, coil_index):
-        row, col = self.calc_grid_coordinates(coil_index)
-        actuator.actuate_single(row, col)
-
-    def advance(self, actuator):
+    def advance(self):
         if self.current_index < len(self.input_trajectory):
             ref_position_idx = self.input_trajectory[self.current_index]
             error = np.linalg.norm(self.get_raw_coordinates(ref_position_idx) - self.position)
 
-            if error <= self.field_range:
-                self.actuate(actuator, ref_position_idx)
+            if error <= FIELD_RANGE:
+                self.__actuate(ref_position_idx)
             else:
                 closest_idx, closest_coil = self.find_closest_coil()
                 shortest_path = self.calculate_shortest_path(closest_idx)
                 self.input_trajectory[self.current_index:self.current_index + len(shortest_path)] = shortest_path
 
             self.current_index += 1
-            self.actuate(actuator, self.input_trajectory[self.current_index])
-            self.actuate(actuator, self.input_trajectory[self.current_index + 1])
+            self.__actuate(self.input_trajectory[self.current_index])
+            self.__actuate(self.input_trajectory[self.current_index + 1])
+    
+    def __actuate(self, coil_index):
+        #TODO: shut off previously turned on coils. this should be a class method in the actuator
+        self._actuator.actuate_single(*self.calc_grid_coordinates(coil_index))
 
     def __coerce_position(self, measured_position):
         '''
             - coerce the current position to the raw coordinates of the nearest coil if within the coersion threshold
-            - this helps filter for tracking noise and discretizes the position to the nearest coil
+            - this helps filter for tracking noise and discretizes the measured position to that of the nearest coil
         '''
 
         coil_position = self.calc_raw_coordinates(self.target_coil_idx)
-
-        if np.linalg.norm(coil_position - np.array(measured_position)) <= COERSION_THRESHOLD:
-            return coil_position
-        else:
-            return measured_position
+        within_threshold = np.linalg.norm(coil_position - np.array(measured_position)) <= COERSION_THRESHOLD
+        return coil_position if within_threshold else measured_position
