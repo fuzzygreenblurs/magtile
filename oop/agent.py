@@ -1,9 +1,7 @@
-import constants
+from initializer import *
 import math
 import numpy as np
 import networkx as nx
-from constants import *
-from helpers import *
 from agent_color import AgentColor
 
 class Agent:
@@ -17,11 +15,16 @@ class Agent:
         try:
             self.platform = platform
             self.color = color
-            self.adjacency_matrix = platform.adjacency_matrix.copy()
+            self.adjacency_matrix = platform.initial_adjacency_matrix.copy()
             self.position = None
             self.target_coil_idx = None
-            self.orbit = getattr(constants, f"{color}_ORBIT")
-            self.ref_trajectory = np.tile(self.target_path, NUM_SAMPLES)
+
+            if color == AgentColor.BLACK:
+                self.orbit = BLACK_ORBIT
+            elif color == AgentColor.YELLOW:
+                self.orbit = YELLOW_ORBIT
+
+            self.ref_trajectory = np.tile(self.orbit, NUM_SAMPLES)
             self.input_trajectory = self.ref_trajectory.copy()
         except AttributeError:
             raise AttributeError(f"the {color} agent instance failed to initialize successfully.")
@@ -73,7 +76,7 @@ class Agent:
         return self.calc_raw_coordinates(*calc_grid_coordinates(idx))
 
     def calc_raw_coordinates(self, row, col):
-        return GRID_POSITIONS[row][col]
+        return self.platform.grid_positions[row][col]
 
     def __actuate(self, coil_index):
         self._actuator.actuate_single(*self.calc_grid_coordinates(coil_index))

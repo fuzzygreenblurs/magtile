@@ -1,6 +1,5 @@
 import serial
 import time
-from constants import *
 
 class Actuator:
     def __init__(self, port, baudrate=115200, timeout=1):

@@ -1,37 +1,26 @@
+from initializer import *
+print("Imported INITIAL_ADJACENCY_MATRIX in platform.py:", 'INITIAL_ADJACENCY_MATRIX' in globals())
+
 import json
-import time
-import math
 import threading
 import numpy as np
 import networkx as nx
 from agent import Agent
 from agent_color import AgentColor
-from constants import *
-'''
-all values are measured in centimeters [cm] unless inches [in] are explicitly specified in variable name
-variable notation: "x" represents a value in centimeters. "x_inches" represents a value in inches
-'''
 
 class Platform:
     def __init__(self, ipc_client):
         self.ipc_client = ipc_client
+        self.generate_meshgrid()
+        self.generate_grid_positions()
+        self.generate_initial_adjacency_matrix()
         self.create_agents()
 
     def control(self):
-        '''
-            for each iteration of the control loop:
-                - if all agents are outside the interference range with each other, follow the individual shortest path calculated for each agent
-                - if any agent falls within the interference range of another agent, calculate a new shortest path without any interference
-        '''
-
-        for i in NUM_SAMPLES:
+        for i in range(NUM_SAMPLES):
             self.update_all_agent_positions()
             if self.any_agents_inside_interference_zone():
-                # TODO: shortest_paths = multi_agent_dijkstra()
-                # TODO: [agent.update_motion_plan({steps: 2, shortest_paths) for path in shortest_paths]
                 pass
-
-            # [agent.advance(i) for agent in self.agents]
             self.advance_agents(i)
 
     def advance_agents(self, i):
@@ -44,31 +33,21 @@ class Platform:
         [thread.join() for thread in threads]
 
     def create_agents(self):
-        '''
-            - placeholder function to instantiate the target agents
-            - TODO: this should be replaced with a more generic add_agent function instead 
-        '''
         yellow = Agent(self, AgentColor.YELLOW)
-        black  = Agent(self, AgentColor.BLACK)
+        black = Agent(self, AgentColor.BLACK)
         self.agents = [yellow, black]
 
     def update_all_agent_positions(self):
         messages = self.ipc_client.xrevrange(POSITIONS_STREAM, count=1)
-        
         if messages:
             _, message = messages[0]
             for agent in self.agents:
                 color = f"b\'{agent.color}\'".encode('utf-8')
                 agent.update_position(json.loads(message[color].decode()))
-
         else:
             return None
 
     def update_adjacency_for_collision_avoidance(self, path, threshold):
-        '''
-        Modify the adjacency matrix to avoid paths that are too close to a given path.
-        '''
-
         A = self.adjacency_matrix.copy()
         for i in range(len(path)):
             for j in range(len(A)):
@@ -79,10 +58,6 @@ class Platform:
         return A
 
     def multi_agent_dijkstra(self, start_idx, end_idx, adjacency_matrix=None):
-        '''
-            - for each agent, calculate the shortest path from its current position to its target
-            - djikstra_2 should be able to handle k agents and enforce the interference zone restriction for all of them 
-        '''
         if adjacency_matrix is None:
             adjacency_matrix = self.adjacency_matrix
         graph = nx.from_numpy_array(adjacency_matrix)
@@ -90,14 +65,56 @@ class Platform:
         return shortest_path
 
     def any_agents_inside_interference_zone(self):
-        '''
-            for an arbitrary number of agents, check if each possible pair of agents is within the interference range
-        '''
-
         agent_positions = [a.position for a in self.agents]
-
         for i in range(len(agent_positions)):
             for j in range(i + 1, len(agent_positions)):
                 if np.linalg.norm(agent_positions[i] - agent_positions[j]) <= FIELD_RANGE:
                     return True
         return False
+
+
+    def generate_meshgrid(self):
+        x_lower = -(GRID_WIDTH - 1) / 2
+        x_upper =  (GRID_WIDTH - 1) / 2
+        x_range = np.linspace(x_lower, x_upper, GRID_WIDTH) * COIL_SPACING
+
+        y_lower = -(GRID_WIDTH - 1) / 2
+        y_upper =  (GRID_WIDTH - 1) / 2
+        y_range = np.linspace(y_upper, y_lower, GRID_WIDTH) * COIL_SPACING
+        
+        self.x_grid, self.y_grid = np.meshgrid(x_range, y_range)
+
+    def generate_grid_positions(self):
+        grid_positions = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_WIDTH)]
+        for i in range(GRID_WIDTH):
+            for j in range(GRID_WIDTH):
+                grid_positions[i][j] = np.array([self.x_grid[i, j], self.y_grid[i, j]])
+
+        self.grid_positions = grid_positions
+
+    def generate_initial_adjacency_matrix(self):
+        num_coils = GRID_WIDTH * GRID_WIDTH
+        A = np.zeros((num_coils, num_coils))
+
+        for i in range(GRID_WIDTH):
+            for j in range(GRID_WIDTH):
+                current_idx = np.ravel_multi_index((i, j), self.x_grid.shape)
+                neighbors = np.array([
+                    [i, j - 1],
+                    [i, j + 1],
+                    [i - 1, j],
+                    [i + 1, j],
+                    [i - 1, j - 1],
+                    [i - 1, j + 1],
+                    [i + 1, j - 1],
+                    [i + 1, j + 1],
+                ])
+
+                for n_i, n_j in neighbors:
+                    if 0 <= n_i < GRID_WIDTH and 0 <= n_j < GRID_WIDTH:
+                        neighbor_index = np.ravel_multi_index((int(n_i), int(n_j)), self.x_grid.shape)
+                        distance = np.linalg.norm(np.array([i, j]) - np.array([n_i, n_j]))
+                        A[current_idx, neighbor_index] = distance
+                        A[neighbor_index, current_idx] = distance
+
+        self.initial_adjacency_matrix = A
