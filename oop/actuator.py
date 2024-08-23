@@ -3,16 +3,6 @@ import time
 from constants import *
 
 class Actuator:
-    _driven_coils = []
-
-    @classmethod
-    def set_driven_coils(cls, driven):
-        cls._driven_coils = driven
-
-    @classmethod
-    def get_driven_coils(cls):
-        return cls._driven_coils
-
     def __init__(self, port, baudrate=115200, timeout=1):
         self.ser = serial.Serial(port, baudrate, timeout=timeout)
         time.sleep(1)  # Wait for Arduino to reset
@@ -36,12 +26,13 @@ class Actuator:
             raise ValueError(f"Unexpected response: {response}")
         
     def actuate_single(self, row, col, duration=0.3, dc=4000):
-        self.set_driven_coils(self.get_driven_coils.append([row, col]))
         print(f"ON: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
+        
         self.set_power(row, col, dc)
         time.sleep(duration)
-        print(f"OFF: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
         self.set_power(row, col, 0)
+        
+        print(f"OFF: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
 
     def stop_all(self):
         # print(f"stopping all coils...")

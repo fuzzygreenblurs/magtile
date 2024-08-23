@@ -1,5 +1,6 @@
 import json
 import time
+import math
 import threading
 import numpy as np
 import networkx as nx
@@ -14,9 +15,6 @@ variable notation: "x" represents a value in centimeters. "x_inches" represents 
 class Platform:
     def __init__(self, ipc_client):
         self.ipc_client = ipc_client
-        self.x_grid, self.y_grid = self.populate_meshgrid()
-        self.grid_positions = self.populate_grid_positions()
-        self.adjacency_matrix = self.initialize_adjacency_matrix()
         self.create_agents()
 
     def control(self):
@@ -29,7 +27,7 @@ class Platform:
         for i in NUM_SAMPLES:
             self.update_all_agent_positions()
             if self.any_agents_inside_interference_zone():
-                # TODO: shortest_paths = djikstra_2()
+                # TODO: shortest_paths = multi_agent_dijkstra()
                 # TODO: [agent.update_motion_plan({steps: 2, shortest_paths) for path in shortest_paths]
                 pass
 
@@ -50,8 +48,8 @@ class Platform:
             - placeholder function to instantiate the target agents
             - TODO: this should be replaced with a more generic add_agent function instead 
         '''
-        yellow = Agent(AgentColor.YELLOW, self.adjacency_matrix.copy())
-        black  = Agent(AgentColor.BLACK, self.adjacency_matrix.copy())
+        yellow = Agent(self, AgentColor.YELLOW)
+        black  = Agent(self, AgentColor.BLACK)
         self.agents = [yellow, black]
 
     def update_all_agent_positions(self):
@@ -65,66 +63,6 @@ class Platform:
 
         else:
             return None
-
-    def populate_meshgrid(self):
-        x_lower = -(GRID_WIDTH - 1) / 2
-        x_upper =  (GRID_WIDTH - 1) / 2
-        x_range = np.linspace(x_lower, x_upper, GRID_WIDTH) * COIL_SPACING
-
-        y_lower = -(GRID_WIDTH - 1) / 2
-        y_upper =  (GRID_WIDTH - 1) / 2
-        y_range = np.linspace(y_upper, y_lower, GRID_WIDTH) * COIL_SPACING
-        
-        return np.meshgrid(x_range, y_range)
-    
-    def populate_coil_grid_positions(self):
-        '''
-            - generates a 2D grid, representing coil position coordinates
-            - each entry represents the (x,y) coordinates of a coil on the grid
-        '''
-
-        x_grid, y_grid = self.__populate_meshgrid()
-
-        grid_positions = [[None for _ in range(GRID_WIDTH)] for _ in range(GRID_WIDTH)]
-        for i in range(GRID_WIDTH):
-            for j in range(GRID_WIDTH):
-                grid_positions[i][j] = np.array([self.x_grid[i, j], self.y_grid[i, j]])
-
-        return grid_positions
-        
-    def initialize_adjacency_matrix(self):
-        '''
-            - generates a matrix representation (called A here) of how far each coil in the platform is to its neighbors
-            - A.shape: NUM_COILS x NUM_COILS (ex. a 15x15 coil platform will generate a 225x225 shaped A matrix)
-            - each coil should have a total of 8 adjacent neighbors (including diagonals)
-        '''
-
-        num_coils = GRID_WIDTH * GRID_WIDTH
-        A = np.zeros((num_coils, num_coils))
-        # A = np.full((num_coils, num_coils), np.inf)
-
-        for i in range(GRID_WIDTH):
-            for j in range(GRID_WIDTH):
-                current_idx = np.ravel_multi_index((i, j), self.x_grid.shape)
-                neighbors = np.array([
-                    [i, j - 1],
-                    [i, j + 1],
-                    [i - 1, j],
-                    [i + 1, j],
-                    [i - 1, j - 1],
-                    [i - 1, j + 1],
-                    [i + 1, j - 1],
-                    [i + 1, j + 1],
-                ])
-
-                for n_i, n_j in neighbors:
-                    if 0 <= n_i < GRID_WIDTH and 0 <= n_j < GRID_WIDTH:
-                        neighbor_index = np.ravel_multi_index((n_i, n_j), self.x_grid.shape)
-                        distance = np.linalg.norm(np.array([i, j]) - np.array([n_i, n_j]))
-                        A[current_idx, neighbor_index] = distance
-                        A[neighbor_index, current_idx] = distance
-
-        return A
 
     def update_adjacency_for_collision_avoidance(self, path, threshold):
         '''
@@ -140,7 +78,7 @@ class Platform:
                     A[j, path[i]] = np.inf
         return A
 
-    def djikstra_2(self, start_idx, end_idx, adjacency_matrix=None):
+    def multi_agent_dijkstra(self, start_idx, end_idx, adjacency_matrix=None):
         '''
             - for each agent, calculate the shortest path from its current position to its target
             - djikstra_2 should be able to handle k agents and enforce the interference zone restriction for all of them 

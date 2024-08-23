@@ -1,9 +1,9 @@
 import constants
+import math
 import numpy as np
 import networkx as nx
-import math
-import threading
 from constants import *
+from helpers import *
 from agent_color import AgentColor
 
 class Agent:
@@ -13,10 +13,11 @@ class Agent:
     def set_actuator(cls, actuator):
         cls._actuator = actuator
 
-    def __init__(self, color: AgentColor, adjacency_matrix):    
+    def __init__(self, platform, color: AgentColor):    
         try:
+            self.platform = platform
             self.color = color
-            self.adjacency_matrix = adjacency_matrix
+            self.adjacency_matrix = platform.adjacency_matrix.copy()
             self.position = None
             self.target_coil_idx = None
             self.orbit = getattr(constants, f"{color}_ORBIT")
@@ -33,36 +34,47 @@ class Agent:
             if error <= FIELD_RANGE:
                 self.__actuate(self.input_trajectory[i])
             else:
-                closest_idx, _ = self.find_closest_coil()
+                closest_idx = self.find_closest_coil()
                 self.__actuate(closest_idx)
-                shortest_path = self.calculate_shortest_path(closest_idx)
+                shortest_path = self.calculate_shortest_path(i, closest_idx)
                 
                 self.input_trajectory[i] = shortest_path[0]
                 self.input_trajectory[i+1] = shortest_path[1]
                 self.__actuate(self.input_trajectory[i])
                 self.__actuate(self.input_trajectory[i+1])
             
-    def update_position(self, new_position):
-        self.position = self.__coerce_position(new_position)
-
     def find_closest_coil(self):
         min_distance = math.inf
         closest_idx = 0
-        for i in range(self.grid_size * self.grid_size):
-            candidate_coordinates = self.get_raw_coordinates(i)
+        for coil_idx in range(NUM_COILS):
+            candidate_coordinates = self.calc_raw_coordinates(coil_idx)
             distance = np.linalg.norm(self.position - candidate_coordinates)
             if distance < min_distance:
                 min_distance = distance
-                closest_idx = i
+                closest_idx = coil_idx
 
-        closest_coil = self.calc_grid_coordinates(closest_idx)
-        return closest_idx, closest_coil
+        return closest_idx
+            
+    def update_position(self, new_position):
+        self.position = self.__coerce_position(new_position)
 
-    def calculate_shortest_path(self, current_position_index):
+    def calculate_shortest_path(self, current_loop_iteration, current_position_idx):
         graph = nx.from_numpy_array(self.adjacency_matrix)
-        ref_position_idx = self.input_trajectory[self.current_index]
-        return nx.dijkstra_path(graph, current_position_index, ref_position_idx)
-    
+        ref_position_idx = self.input_trajectory[current_loop_iteration]
+        return nx.dijkstra_path(graph, current_position_idx, ref_position_idx)
+        
+    def calc_grid_coordinates(self, idx):
+        row = idx // GRID_WIDTH
+        col = idx % GRID_WIDTH
+        # print(f"calc grid coordinates: idx: {idx}, Row: {row}, Col: {col}")
+        return row, col
+
+    def calc_raw_coordinates(self, idx):
+        return self.calc_raw_coordinates(*calc_grid_coordinates(idx))
+
+    def calc_raw_coordinates(self, row, col):
+        return GRID_POSITIONS[row][col]
+
     def __actuate(self, coil_index):
         self._actuator.actuate_single(*self.calc_grid_coordinates(coil_index))
         
