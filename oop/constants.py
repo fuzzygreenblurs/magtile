@@ -1,5 +1,5 @@
 import numpy as np
-import redis
+
 
 '''
     - all values are measured in centimeters [cm] unless inches [in] are explicitly specified in variable name
@@ -24,7 +24,6 @@ COERSION_THRESHOLD    = COERSION_THRESHOLD_IN * 2.54                            
 SAMPLING_PERIOD       = 0.1                                                     # time between camera readings [sec]
 
 # redis parameters
-IPC_CLIENT = redis.Redis(host='localhost', port=6379, db=0)
 POSITIONS_STREAM = 'stream_positions'
 
 # actuator parameters

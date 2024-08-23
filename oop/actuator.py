@@ -35,21 +35,13 @@ class Actuator:
         else:
             raise ValueError(f"Unexpected response: {response}")
         
-    def actuate(self, row, col, dc=4000):
-        self.set_power(row, col, dc)
-        print(f"Stopped all coils first. Now setting power for coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}%")
-        
-    def actuate_single(self, row, col, dc=4000):
+    def actuate_single(self, row, col, duration=0.3, dc=4000):
         self.set_driven_coils(self.get_driven_coils.append([row, col]))
+        print(f"ON: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
         self.set_power(row, col, dc)
-        time.sleep(0.3)
-        print(f"Setting power for coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}%")
-        # print(f"Stopped all coils first. Now setting power for coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}%")
-
-    def stop_all_driven(self):
-        for coil in self.get_driven_coils():
-            self.set_power(coil[0], coil[1], 0)
-        self.set_driven_coils = []
+        time.sleep(duration)
+        print(f"OFF: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
+        self.set_power(row, col, 0)
 
     def stop_all(self):
         # print(f"stopping all coils...")
