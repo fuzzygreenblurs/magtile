@@ -1,0 +1,4 @@
+networkx==3.3
+numpy==2.1.0
+pyserial==3.5
+redis==5.0.8
