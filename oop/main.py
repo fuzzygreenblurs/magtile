@@ -8,7 +8,7 @@ if __name__ == '__main__':
         with redis.Redis(host='localhost', port=6379, db=0) as ipc_client:
             try:
                 platform = Platform(ipc_client)
-                # platform.control()
+                platform.control()
                 
             except KeyboardInterrupt:
                 actuator.stop_all()

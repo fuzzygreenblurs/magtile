@@ -1,12 +1,12 @@
-from initializer import *
-print("Imported INITIAL_ADJACENCY_MATRIX in platform.py:", 'INITIAL_ADJACENCY_MATRIX' in globals())
-
+import pdb
 import json
 import threading
+import time
 import numpy as np
 import networkx as nx
 from agent import Agent
 from agent_color import AgentColor
+from initializer import *
 
 class Platform:
     def __init__(self, ipc_client):
@@ -18,10 +18,17 @@ class Platform:
 
     def control(self):
         for i in range(NUM_SAMPLES):
+            self.current_control_iteration = i
+            
             self.update_all_agent_positions()
-            if self.any_agents_inside_interference_zone():
-                pass
+            # if self.any_agents_inside_interference_zone():
+            #     #TODO: djikstra2
+            #     #TODO: update input trajectories for all agents
+            #     pass
+            
             self.advance_agents(i)
+
+            time.sleep(1)
 
     def advance_agents(self, i):
         threads = []
@@ -42,10 +49,14 @@ class Platform:
         if messages:
             _, message = messages[0]
             for agent in self.agents:
-                color = f"b\'{agent.color}\'".encode('utf-8')
-                agent.update_position(json.loads(message[color].decode()))
+                color = f"{agent.color.value}".encode('utf-8')
+                payload = json.loads(message[color].decode())
+                # if agent.color == AgentColor.YELLOW:
+                #     print(f"REDIS READ: {agent.color} payload: {payload}")
+                agent.update_position(payload)
         else:
             return None
+        
 
     def update_adjacency_for_collision_avoidance(self, path, threshold):
         A = self.adjacency_matrix.copy()

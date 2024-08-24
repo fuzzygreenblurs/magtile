@@ -17,8 +17,8 @@ class Agent:
             self.color = color
             self.adjacency_matrix = platform.initial_adjacency_matrix.copy()
             self.position = None
-            self.target_coil_idx = None
 
+            #TODO: set color dynamically
             if color == AgentColor.BLACK:
                 self.orbit = BLACK_ORBIT
             elif color == AgentColor.YELLOW:
@@ -26,6 +26,8 @@ class Agent:
 
             self.ref_trajectory = np.tile(self.orbit, NUM_SAMPLES)
             self.input_trajectory = self.ref_trajectory.copy()
+            self.target_coil_idx = self.input_trajectory[0]
+
         except AttributeError:
             raise AttributeError(f"the {color} agent instance failed to initialize successfully.")
         
@@ -72,10 +74,10 @@ class Agent:
         # print(f"calc grid coordinates: idx: {idx}, Row: {row}, Col: {col}")
         return row, col
 
-    def calc_raw_coordinates(self, idx):
-        return self.calc_raw_coordinates(*calc_grid_coordinates(idx))
+    def calc_raw_coordinates_by_idx(self, idx):
+        return self.calc_raw_coordinates_by_pos(*self.calc_grid_coordinates(idx))
 
-    def calc_raw_coordinates(self, row, col):
+    def calc_raw_coordinates_by_pos(self, row, col):
         return self.platform.grid_positions[row][col]
 
     def __actuate(self, coil_index):
@@ -87,6 +89,8 @@ class Agent:
             - this helps filter for tracking noise and discretizes the measured position to that of the nearest coil
         '''
 
-        coil_position = self.calc_raw_coordinates(self.target_coil_idx)
+        target_coil_idx = self.input_trajectory[self.platform.current_control_iteration]
+        coil_position = self.calc_raw_coordinates_by_idx(target_coil_idx)
         within_threshold = np.linalg.norm(coil_position - np.array(measured_position)) <= COERSION_THRESHOLD
+
         return coil_position if within_threshold else measured_position
