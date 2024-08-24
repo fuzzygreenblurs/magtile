@@ -1,3 +1,4 @@
+import asyncio
 import redis
 import numpy as np
 from agent import Agent
@@ -10,7 +11,7 @@ if __name__ == '__main__':
             try:
                 Agent.set_actuator(actuator)
                 platform = Platform(ipc_client)
-                platform.control()
+                asyncio.run(platform.control())
                 
             except KeyboardInterrupt:
                 actuator.stop_all()

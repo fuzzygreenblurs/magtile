@@ -1,3 +1,4 @@
+import asyncio
 import serial
 import time
 
@@ -24,11 +25,12 @@ class Actuator:
         else:
             raise ValueError(f"Unexpected response: {response}")
         
-    def actuate_single(self, row, col, duration=0.3, dc=4000):
+    async def actuate_single(self, row, col, duration=0.3, dc=4000):
         print(f"ON: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
         
         self.set_power(row, col, dc)
-        time.sleep(duration)
+        await asyncio.sleep(duration)
+        # time.sleep(duration)
         self.set_power(row, col, 0)
         
         print(f"OFF: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")

@@ -32,27 +32,50 @@ class Agent:
         except AttributeError:
             raise AttributeError(f"the {color} agent instance failed to initialize successfully.")
         
-    def advance(self):
+    async def advance(self):
         i = self.platform.current_control_iteration
 
         if i < len(self.input_trajectory):
             error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
-            print("current_position: ", self.position, "ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
+            print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
+            print("current_position: ", self.position)
             print("error", error)
             if error <= FIELD_RANGE:
                 print("INSIDE field range of ref coil ...")
-                self.__actuate(self.input_trajectory[i])
+                await self.__actuate(self.input_trajectory[i])
             else:
                 print("OUTSIDE field range of ref coil...")
                 closest_idx = self.find_closest_coil()
                 self.__actuate(closest_idx)
                 shortest_path = self.calculate_shortest_path(closest_idx)
                 
-                # self.update_input_plan([shortest_path[0], shortest_path[1]])
-                self.input_trajectory[i] = shortest_path[0]
-                self.input_trajectory[i+1] = shortest_path[1]
-                self.__actuate(self.input_trajectory[i])
-                self.__actuate(self.input_trajectory[i+1])
+                self.update_input_plan([shortest_path[0], shortest_path[1]])
+                
+                await self.__actuate(self.input_trajectory[i])
+                await self.__actuate(self.input_trajectory[i+1])
+                
+    # def advance(self):
+    #     i = self.platform.current_control_iteration
+
+    #     if i < len(self.input_trajectory):
+    #         error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
+    #         print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
+    #         print("current_position: ", self.position)
+    #         print("error", error)
+    #         if error <= FIELD_RANGE:
+    #             print("INSIDE field range of ref coil ...")
+    #             self.__actuate(self.input_trajectory[i])
+    #         else:
+    #             print("OUTSIDE field range of ref coil...")
+    #             closest_idx = self.find_closest_coil()
+    #             self.__actuate(closest_idx)
+    #             shortest_path = self.calculate_shortest_path(closest_idx)
+                
+    #             # self.update_input_plan([shortest_path[0], shortest_path[1]])
+    #             self.input_trajectory[i] = shortest_path[0]
+    #             self.input_trajectory[i+1] = shortest_path[1]
+    #             self.__actuate(self.input_trajectory[i])
+    #             self.__actuate(self.input_trajectory[i+1])
 
     def update_input_plan(self, inputs):
         for s, step in enumerate(inputs):
@@ -91,8 +114,8 @@ class Agent:
     def calc_raw_coordinates_by_pos(self, row, col):
         return self.platform.grid_positions[row][col]
 
-    def __actuate(self, idx):
-        self._actuator.actuate_single(*self.calc_grid_coordinates(idx))
+    async def __actuate(self, idx):
+        await self._actuator.actuate_single(*self.calc_grid_coordinates(idx))
         
     def __coerce_position(self, measured_position):
         '''

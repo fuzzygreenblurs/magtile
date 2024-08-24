@@ -9,8 +9,9 @@ import numpy as np
 
 # experiment parameters
 YELLOW_ORBIT          = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
+BLACK_ORBIT           = [13, 14]
 # YELLOW_ORBIT          = [112, 97, 81, 80, 94, 109, 125, 126]
-BLACK_ORBIT           = [117, 102, 88, 89, 105, 120, 134, 133]
+# BLACK_ORBIT           = [117, 102, 88, 89, 105, 120, 134, 133]
 REF_TRAJECTORY_PERIOD = 200                                                     # total time period [sec]
 SAMPLING_PERIOD       = 0.0625                                                  # camera sampling period [sec]
 NUM_SAMPLES           = int(np.ceil(REF_TRAJECTORY_PERIOD / SAMPLING_PERIOD))
@@ -18,7 +19,7 @@ NUM_SAMPLES           = int(np.ceil(REF_TRAJECTORY_PERIOD / SAMPLING_PERIOD))
 # platform parameters
 GRID_WIDTH            = 15                                                      # grid dimensions for static dipoles [#]
 NUM_COILS             = GRID_WIDTH * GRID_WIDTH
-FIELD_RANGE           = 3.5                                                     # magnetic force range [cm]
+FIELD_RANGE           = 4                                                     # magnetic force range [cm]
 COIL_SPACING          = 2.159                                                   # spacing between static dipoles: 2.159 [cm]
 COERSION_THRESHOLD_IN = 0.4                                                     # a sampled position within this threshold of a coil could be coerced to coil centroid position [in]
 COERSION_THRESHOLD    = COERSION_THRESHOLD_IN * 2.54                            # coersion threshold [cm]

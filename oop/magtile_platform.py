@@ -2,6 +2,7 @@ import pdb
 import json
 import threading
 import time
+import asyncio
 import numpy as np
 import networkx as nx
 from agent import Agent
@@ -16,7 +17,7 @@ class Platform:
         self.generate_initial_adjacency_matrix()
         self.create_agents()
 
-    def control(self):
+    async def control(self):
         print("num samples: ", NUM_SAMPLES)
         for i in range(NUM_SAMPLES):
             self.current_control_iteration = i
@@ -29,13 +30,22 @@ class Platform:
             #     #TODO: update input trajectories for all agents
             #     pass
             
-            self.advance_agents(i)
+            await self.advance_agents()
 
             # time.sleep(1)
 
-    def advance_agents(self, i):
+    async def advance_agents(self):
         yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
-        yellow_agent.advance()
+        await asyncio.gather(yellow_agent.advance())
+                             
+        # await asyncio.gather(*[a.advance() for a in self.agents])
+
+    # def advance_agents(self, i):
+    #     #TODO: switch to async processing
+    #     # [a.advance() for a in self.agents]
+
+    #     yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
+    #     yellow_agent.advance()
 
         # threads = []
         # for agent in self.agents:
