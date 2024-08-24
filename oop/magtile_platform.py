@@ -35,10 +35,10 @@ class Platform:
             # time.sleep(1)
 
     async def advance_agents(self):
-        yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
-        await asyncio.gather(yellow_agent.advance())
+        # yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
+        # await asyncio.gather(yellow_agent.advance())
                              
-        # await asyncio.gather(*[a.advance() for a in self.agents])
+        await asyncio.gather(*[a.advance() for a in self.agents])
 
     # def advance_agents(self, i):
     #     #TODO: switch to async processing
