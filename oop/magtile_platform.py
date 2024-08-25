@@ -60,8 +60,6 @@ class Platform:
 
         for i in range(len(agent_positions)):
             for j in range(i + 1, len(agent_positions)):
-                pdb.set_trace()    
-
                 if np.linalg.norm(agent_positions[i] - agent_positions[j]) <= INTERFERENCE_RANGE:
                     return True
         return False

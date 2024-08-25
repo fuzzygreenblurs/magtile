@@ -87,12 +87,14 @@ class Agent:
             adjacency_matrix = self.adjacency_matrix
 
         graph = nx.from_numpy_array(adjacency_matrix)
-        current_idx = self.calc_closest_idx(*self.calc_grid_coordinates(self.position))
+        current_idx = self.find_closest_coil()
+        # current_idx = self.calc_closest_idx(*self.calc_grid_coordinates(self.position))
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
         shortest_path = nx.dijkstra_path(graph, current_idx, ref_position_idx)
         return shortest_path
-
-    def calc_grid_coordinates(self, idx):
+    
+    @classmethod
+    def calc_grid_coordinates(cls, idx):
         row = idx // GRID_WIDTH
         col = idx % GRID_WIDTH
         return row, col
@@ -118,4 +120,4 @@ class Agent:
         coil_position = self.calc_raw_coordinates_by_idx(self.target_coil_idx)
         within_threshold = np.linalg.norm(coil_position - np.array(measured_position)) <= COERSION_THRESHOLD
 
-        return coil_position if within_threshold else measured_position
+        return np.array(coil_position) if within_threshold else np.array(measured_position)

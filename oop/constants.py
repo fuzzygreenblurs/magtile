@@ -27,7 +27,7 @@ SAMPLING_PERIOD       = 0.1                                                     
 FIELD_RANGE                = 3.5                                                       # magnetic force range [cm]
 OUT_OF_RANGE               = -1000000
 COERSION_THRESHOLD         = COERSION_THRESHOLD_IN * 2.54                            # coersion threshold [cm]
-INTERFERENCE_RANGE         = 3 * FIELD_RANGE
+INTERFERENCE_RANGE         = 4 * FIELD_RANGE
 DEFAULT_ACTUATION_DURATION = 0.4
 DEFAULT_DUTY_CYCLE         = 4095
 
