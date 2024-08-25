@@ -4,6 +4,7 @@ import json
 import numpy as np
 import sys
 import time
+from constants import *
 
 # Socket
 SERVER_ADDR = ('localhost', 65432)
@@ -26,8 +27,6 @@ PIX_TO_CM_X = SIZE_IN_CM / SIZE_IN_PIX_X
 PIX_TO_CM_Y = SIZE_IN_CM / SIZE_IN_PIX_X
 WORLD_ORIGIN_TRANSLATION_X = SIZE_IN_PIX_X / 2
 WORLD_ORIGIN_TRANSLATION_Y = SIZE_IN_PIX_Y / 2
-
-OUT_OF_RANGE = -100
 
 # SIZE_IN_PIX_X = MAX_X_PIX - MIN_X_PIX
 # SIZE_IN_CM = 30.1625

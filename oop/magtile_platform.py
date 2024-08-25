@@ -1,7 +1,5 @@
 import pdb
 import json
-import threading
-import time
 import asyncio
 import numpy as np
 import networkx as nx
@@ -25,37 +23,16 @@ class Platform:
             print("iteration: ", self.current_control_iteration)    
 
             self.update_all_agent_positions()
-            # if self.any_agents_inside_interference_zone():
-            #     #TODO: djikstra2
-            #     #TODO: update input trajectories for all agents
-            #     pass
+            if self.any_agents_inside_interference_zone():
+                self.recalculate_paths_for_agents()
             
             await self.advance_agents()
 
-            # time.sleep(1)
-
     async def advance_agents(self):
-        # yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
-        # await asyncio.gather(yellow_agent.advance())
-                             
         await asyncio.gather(*[a.advance() for a in self.agents])
 
-    # def advance_agents(self, i):
-    #     #TODO: switch to async processing
-    #     # [a.advance() for a in self.agents]
-
-    #     yellow_agent = [a for a in self.agents if a.color == AgentColor.YELLOW][0]
-    #     yellow_agent.advance()
-
-        # threads = []
-        # for agent in self.agents:
-        #     thread = threading.Thread(target=agent.advance, args=())
-        #     threads.append(thread)
-
-        # [thread.start() for thread in threads]
-        # [thread.join() for thread in threads]
-
     def create_agents(self):
+        #this is setup to create two agents. we can create extend this function to more agents as needed
         yellow = Agent(self, AgentColor.YELLOW)
         black = Agent(self, AgentColor.BLACK)
         self.agents = [yellow, black]
@@ -67,37 +44,51 @@ class Platform:
             for agent in self.agents:
                 color = f"{agent.color.value}".encode('utf-8')
                 payload = json.loads(message[color].decode())
-                # if agent.color == AgentColor.YELLOW:
-                #     print(f"REDIS READ: {agent.color} payload: {payload}")
                 agent.update_position(payload)
         else:
             return None
 
-    def update_adjacency_for_collision_avoidance(self, path, threshold):
-        A = self.adjacency_matrix.copy()
-        for i in range(len(path)):
-            for j in range(len(A)):
-                distance = np.linalg.norm(np.array(self.grid_positions[path[i]]) - np.array(self.grid_positions[j]))
-                if distance < threshold:
-                    A[path[i], j] = np.inf
-                    A[j, path[i]] = np.inf
-        return A
-
-    def multi_agent_dijkstra(self, start_idx, end_idx, adjacency_matrix=None):
-        if adjacency_matrix is None:
-            adjacency_matrix = self.adjacency_matrix
-        graph = nx.from_numpy_array(adjacency_matrix)
-        shortest_path = nx.dijkstra_path(graph, start_idx, end_idx)
-        return shortest_path
-
+    ######### multi-agent Djikstra ##########
     def any_agents_inside_interference_zone(self):
         agent_positions = [a.position for a in self.agents]
         for i in range(len(agent_positions)):
-            for j in range(i + 1, len(agent_positions)):
-                if np.linalg.norm(agent_positions[i] - agent_positions[j]) <= FIELD_RANGE:
+            for k in range(i + 1, len(agent_positions)):
+                if np.linalg.norm(agent_positions[i] - agent_positions[k]) <= FIELD_RANGE:
                     return True
         return False
 
+    def recalculate_paths_for_agents(self):
+        for i, agent in enumerate(self.agents):
+            other_agents = [a for j, a in enumerate(self.agents) if not j == i]
+            shortest_safe_path = self.__calc_safe_path(agent, other_agents)
+            agent.update_motion_plan(shortest_safe_path)
+
+    def __calc_safe_path(self, agent, other_agents):
+        adjusted_adjacency_matrix = self.initial_adjacency_matrix.copy()
+
+        for other_agent in other_agents:
+            adjusted_adjacency_matrix = self.__generate_safe_adjacency(
+                adjusted_adjacency_matrix, 
+                other_agent.input_trajectory
+            )
+
+        return agent.multi_agent_dijkstra(
+            agent.position, 
+            agent.target_idx,
+            adjusted_adjacency_matrix)
+
+    def __generate_safe_adjacency(self, adjacency_matrix, other_agent_path):
+        for i in range(len(other_agent_path)):
+            for j in range(len(adjacency_matrix)):
+                distance = np.linalg.norm(np.array(self.grid_positions[other_agent_path[i]] - np.array(self.grid_positions[j])))
+
+                if distance <= INTEFERENCE_RANGE:
+                    adjacency_matrix[other_agent_path[i], j] = np.inf
+                    adjacency_matrix[j, other_agent_path[i]] = np.inf
+
+        return adjacency_matrix
+
+    ###### initializer functions ######
 
     def generate_meshgrid(self):
         x_lower = -(GRID_WIDTH - 1) / 2
@@ -144,3 +135,4 @@ class Platform:
                         A[neighbor_index, current_idx] = distance
 
         self.initial_adjacency_matrix = A
+

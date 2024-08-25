@@ -17,7 +17,8 @@ class Agent:
             self.platform = platform
             self.color = color
             self.adjacency_matrix = platform.initial_adjacency_matrix.copy()
-            self.position = None
+            self.position = [OUT_OF_RANGE, OUT_OF_RANGE]
+            self.closest_grid_position = [OUT_OF_RANGE, OUT_OF_RANGE]
 
             #TODO: set color dynamically
             if color == AgentColor.BLACK:
@@ -33,8 +34,10 @@ class Agent:
             raise AttributeError(f"the {color} agent instance failed to initialize successfully.")
         
     async def advance(self):
+        if self.is_out_of_range():
+            return
+        
         i = self.platform.current_control_iteration
-
         if i < len(self.input_trajectory):
             error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
             print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
@@ -47,37 +50,17 @@ class Agent:
                 print("OUTSIDE field range of ref coil...")
                 closest_idx = self.find_closest_coil()
                 self.__actuate(closest_idx)
-                shortest_path = self.calculate_shortest_path(closest_idx)
+                shortest_path = self.single_agent_shortest_path(closest_idx)
                 
-                self.update_input_plan([shortest_path[0], shortest_path[1]])
+                self.update_motion_plan([shortest_path[0], shortest_path[1]])
                 
                 await self.__actuate(self.input_trajectory[i])
                 await self.__actuate(self.input_trajectory[i+1])
                 
-    # def advance(self):
-    #     i = self.platform.current_control_iteration
+    def is_out_of_range(self):
+        return np.any(self.position == OUT_OF_RANGE)
 
-    #     if i < len(self.input_trajectory):
-    #         error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
-    #         print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
-    #         print("current_position: ", self.position)
-    #         print("error", error)
-    #         if error <= FIELD_RANGE:
-    #             print("INSIDE field range of ref coil ...")
-    #             self.__actuate(self.input_trajectory[i])
-    #         else:
-    #             print("OUTSIDE field range of ref coil...")
-    #             closest_idx = self.find_closest_coil()
-    #             self.__actuate(closest_idx)
-    #             shortest_path = self.calculate_shortest_path(closest_idx)
-                
-    #             # self.update_input_plan([shortest_path[0], shortest_path[1]])
-    #             self.input_trajectory[i] = shortest_path[0]
-    #             self.input_trajectory[i+1] = shortest_path[1]
-    #             self.__actuate(self.input_trajectory[i])
-    #             self.__actuate(self.input_trajectory[i+1])
-
-    def update_input_plan(self, inputs):
+    def update_motion_plan(self, inputs):
         for s, step in enumerate(inputs):
             input_step = self.platform.current_control_iteration + s
             self.input_trajectory[input_step] = inputs[s]
@@ -96,12 +79,25 @@ class Agent:
             
     def update_position(self, new_position):
         self.position = self.__coerce_position(new_position)
+        self.closest_grid_position = self.calc_grid_coordinates(self.find_closest_coil())
 
-    def calculate_shortest_path(self, current_position_idx):
+    def single_agent_shortest_path(self, current_position_idx):
         graph = nx.from_numpy_array(self.adjacency_matrix)
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
         return nx.dijkstra_path(graph, current_position_idx, ref_position_idx)
         
+    def multi_agent_shortest_path(self, adjacency_matrix=None):
+        if adjacency_matrix is None:
+            adjacency_matrix = self.plaform.initial_adjacency_matrix
+
+        self.adjacency_matrix = adjacency_matrix
+            
+        graph = nx.from_numpy_array(self.adjacency_matrix)
+        current_idx = self.calc_closest_idx(self.closest_grid_position)
+        ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
+        shortest_path = nx.dijkstra_path(graph, current_idx, ref_position_idx)
+        return shortest_path
+
     def calc_grid_coordinates(self, idx):
         row = idx // GRID_WIDTH
         col = idx % GRID_WIDTH
@@ -113,6 +109,9 @@ class Agent:
 
     def calc_raw_coordinates_by_pos(self, row, col):
         return self.platform.grid_positions[row][col]
+    
+    def calc_closest_idx(self, row, col):
+        return (row * 15) + col
 
     async def __actuate(self, idx):
         await self._actuator.actuate_single(*self.calc_grid_coordinates(idx))
@@ -123,8 +122,8 @@ class Agent:
             - this helps filter for tracking noise and discretizes the measured position to that of the nearest coil
         '''
 
-        target_coil_idx = self.input_trajectory[self.platform.current_control_iteration]
-        coil_position = self.calc_raw_coordinates_by_idx(target_coil_idx)
+        self.target_coil_idx = self.input_trajectory[self.platform.current_control_iteration]
+        coil_position = self.calc_raw_coordinates_by_idx(self.target_coil_idx)
         within_threshold = np.linalg.norm(coil_position - np.array(measured_position)) <= COERSION_THRESHOLD
 
-        return coil_position if within_threshold else measured_position
+        return np.array(coil_position) if within_threshold else np.array(measured_position)
