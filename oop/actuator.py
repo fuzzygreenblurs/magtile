@@ -1,6 +1,7 @@
 import asyncio
 import serial
 import time
+from constants import *
 
 class Actuator:
     def __init__(self, port, baudrate=115200, timeout=1):
@@ -25,7 +26,7 @@ class Actuator:
         else:
             raise ValueError(f"Unexpected response: {response}")
         
-    async def actuate_single(self, row, col, duration=0.3, dc=4000):
+    async def actuate_single(self, row, col, duration=DEFAULT_ACTUATION_DURATION, dc=DEFAULT_DUTY_CYCLE):
         print(f"ON: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
         
         self.set_power(row, col, dc)
@@ -33,7 +34,7 @@ class Actuator:
         # time.sleep(duration)
         self.set_power(row, col, 0)
         
-        print(f"OFF: coil_id: ({row}, {col}) to {round((dc/4095) * 100, 2)}...%")
+        print(f"OFF: coil_id: ({row}, {col}) to 0%")
 
     def stop_all(self):
         # print(f"stopping all coils...")
