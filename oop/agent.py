@@ -54,9 +54,11 @@ class Agent:
                 # print("OUTSIDE field range of ref coil...")
                 closest_idx = self.find_closest_coil()
                 shortest_path = self.single_agent_shortest_path(closest_idx)
-                if self.color == AgentColor.BLACK and self.platform.within_interference_range:
-                    print(f"black trajectory after: {self.input_trajectory[0], self.input_trajectory[1], self.input_trajectory[2]}")
-                    print("----- END: INTEFERENCE SUBROUTINE ---- \n")
+                # if self.color == AgentColor.BLACK and self.platform.within_interference_range:
+                if self.color == AgentColor.BLACK:
+                    print(f"black shortest path: {shortest_path}")
+                    # print(f"black trajectory after: {self.input_trajectory[0], self.input_trajectory[1], self.input_trajectory[2]}")
+                    # print("----- END: INTEFERENCE SUBROUTINE ---- \n")
                 self.update_motion_plan(shortest_path[:2])
                 await self.__actuate(self.input_trajectory[i])
                 await self.__actuate(self.input_trajectory[i+1])
@@ -85,25 +87,19 @@ class Agent:
         self.position = self.__coerce_position(new_position)
         self.grid_position = self.find_closest_coil()
 
-    def single_agent_shortest_path(self, current_position_idx):
+    def single_agent_shortest_path(self, current_position_idx=None):
+        if current_position_idx == None:
+            current_position_idx = self.find_closest_coil()
+
         graph = nx.from_numpy_array(self.adjacency_matrix)
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
         return nx.dijkstra_path(graph, current_position_idx, ref_position_idx)
-
-    def multi_agent_shortest_path(self, adjacency_matrix=None):
-        if adjacency_matrix is None:
-            adjacency_matrix = self.adjacency_matrix
-
-        graph = nx.from_numpy_array(adjacency_matrix)
-        current_idx = self.find_closest_coil()
-        # current_idx = self.calc_closest_idx(*self.calc_grid_coordinates(self.position))
-        ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
-        shortest_path = nx.dijkstra_path(graph, current_idx, ref_position_idx)
-        return shortest_path
     
     def is_close_to_reference(self):
         i = self.platform.current_control_iteration
-        if np.linalg.norm(self.position - np.array(self.ref_trajectory[i])) <= FIELD_RANGE:
+        error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
+
+        if error <= FIELD_RANGE:
             return True
         return False
 
