@@ -4,6 +4,7 @@ import networkx as nx
 from agent_color import AgentColor
 from constants import *
 import pdb
+import inspect
 
 class Agent:
     _actuator = None
@@ -12,9 +13,13 @@ class Agent:
     def set_actuator(cls, actuator):
         cls._actuator = actuator
 
+    @classmethod
+    def set_platform(cls, platform):
+        cls.platform = platform
+
     def __init__(self, platform, color: AgentColor):
         try:
-            self.platform = platform
+            self.set_platform(platform)
             self.color = color
             self.adjacency_matrix = platform.initial_adjacency_matrix.copy()
             self.position = [OUT_OF_RANGE, OUT_OF_RANGE]
@@ -39,16 +44,19 @@ class Agent:
         i = self.platform.current_control_iteration
         if i < len(self.input_trajectory):
             error = np.linalg.norm(self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]) - self.position)
-            print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
-            print("current_position: ", self.position)
-            print("error", error)
+            # print("ref position: ", self.ref_trajectory[i], "grid coordinates: ", self.calc_grid_coordinates(self.ref_trajectory[i]), "raw coordinates: ", self.calc_raw_coordinates_by_idx(self.ref_trajectory[i]))
+            # print("current_position: ", self.position)
+            # print("error", error)
             if error <= FIELD_RANGE:
-                print("INSIDE field range of ref coil ...")
+                # print("INSIDE field range of ref coil ...")
                 await self.__actuate(self.input_trajectory[i])
             else:
-                print("OUTSIDE field range of ref coil...")
+                # print("OUTSIDE field range of ref coil...")
                 closest_idx = self.find_closest_coil()
                 shortest_path = self.single_agent_shortest_path(closest_idx)
+                if self.color == AgentColor.BLACK and self.platform.within_interference_range:
+                    print(f"black trajectory after: {self.input_trajectory[0], self.input_trajectory[1], self.input_trajectory[2]}")
+                    print("----- END: INTEFERENCE SUBROUTINE ---- \n")
                 self.update_motion_plan(shortest_path[:2])
                 await self.__actuate(self.input_trajectory[i])
                 await self.__actuate(self.input_trajectory[i+1])
@@ -93,19 +101,29 @@ class Agent:
         shortest_path = nx.dijkstra_path(graph, current_idx, ref_position_idx)
         return shortest_path
     
+    def is_close_to_reference(self):
+        i = self.platform.current_control_iteration
+        if np.linalg.norm(self.position - np.array(self.ref_trajectory[i])) <= FIELD_RANGE:
+            return True
+        return False
+
+    
     @classmethod
     def calc_grid_coordinates(cls, idx):
         row = idx // GRID_WIDTH
         col = idx % GRID_WIDTH
         return row, col
 
-    def calc_raw_coordinates_by_idx(self, idx):
-        return self.calc_raw_coordinates_by_pos(*self.calc_grid_coordinates(idx))
+    @classmethod
+    def calc_raw_coordinates_by_idx(cls, idx):
+        return cls.calc_raw_coordinates_by_pos(*cls.calc_grid_coordinates(idx))
 
-    def calc_raw_coordinates_by_pos(self, row, col):
-        return self.platform.grid_positions[row][col]
+    @classmethod
+    def calc_raw_coordinates_by_pos(cls, row, col):
+        return cls.platform.grid_positions[row][col]
 
-    def calc_closest_idx(self, row, col):
+    @classmethod
+    def calc_closest_idx(cls, row, col):
         return (row * GRID_WIDTH) + col
 
     async def __actuate(self, idx):
