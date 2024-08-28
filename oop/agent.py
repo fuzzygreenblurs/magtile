@@ -55,8 +55,7 @@ class Agent:
                 closest_idx = self.find_closest_coil()
                 shortest_path = self.single_agent_shortest_path(closest_idx)
                 # if self.color == AgentColor.BLACK and self.platform.within_interference_range:
-                if self.color == AgentColor.BLACK:
-                    print(f"black shortest path: {shortest_path}")
+                print(f"{self.color}: shortest path: {shortest_path}")
                     # print(f"black trajectory after: {self.input_trajectory[0], self.input_trajectory[1], self.input_trajectory[2]}")
                     # print("----- END: INTEFERENCE SUBROUTINE ---- \n")
                 self.update_motion_plan(shortest_path[:2])
@@ -67,9 +66,13 @@ class Agent:
         return np.array_equal(self.position, [OUT_OF_RANGE, OUT_OF_RANGE])
 
     def update_motion_plan(self, inputs):
+        i = self.platform.current_control_iteration
+        # print("old input_trajectory: ", self.input_trajectory[i], self.input_trajectory[i+1], self.input_trajectory[i+2])
         for s, step in enumerate(inputs):
             input_step = self.platform.current_control_iteration + s
             self.input_trajectory[input_step] = inputs[s]
+        # print("incoming changes: ", inputs)
+        # print("new input_trajectory: ", self.input_trajectory[i], self.input_trajectory[i+1], self.input_trajectory[i+2])
 
     def find_closest_coil(self):
         min_distance = math.inf
