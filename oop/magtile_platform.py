@@ -21,7 +21,7 @@ class Platform:
         # print("num samples: ", NUM_SAMPLES)
         for i in range(NUM_SAMPLES):
             self.current_control_iteration = i
-            # print("\n------")
+            print(f"\n------ {i} ------")
             # print("iteration: ", self.current_control_iteration)
 
             self.update_all_agent_positions()
@@ -71,81 +71,72 @@ class Platform:
         return [a for a in self.agents if a.color == color][0]
 
     def plan_for_interference(self):
-        self.within_interference_range = False
-        yellow = self.retrieve_agent(AgentColor.YELLOW)
-        black  = self.retrieve_agent(AgentColor.BLACK)
-
-        yellow.adjacency_matrix = self.initial_adjacency_matrix
-        black.adjacency_matrix = self.initial_adjacency_matrix
-        print(f"\n---- {self.current_control_iteration} ----")
-        print("yellow idx: ", yellow.find_closest_coil())
-        print("black idx: ",  black.find_closest_coil())
-
         if all(a.is_close_to_reference() for a in self.agents):
             print("no calculation necessary...")
             return
         
-        elif yellow.is_close_to_reference() and not black.is_close_to_reference():
-            print("yellow: close, black: far")
-            distance_yellow_black = np.linalg.norm(yellow.position - black.position)
-            yellow_ref_position = np.array(Agent.calc_grid_coordinates(yellow.ref_trajectory[self.current_control_iteration]))
-            distance_black_yellow_ref = np.linalg.norm(black.position - yellow_ref_position)
-            deactivated_epicenter = yellow.position if (distance_black_yellow_ref > distance_yellow_black ) else yellow_ref_position
-            deactivated_epicenter_idx = self.find_closest_grid_position_idx(deactivated_epicenter)
+        i = self.current_control_iteration
+        
+        for a in self.agents:
+            a.adjacency_matrix = self.initial_adjacency_matrix
+        
+        primary, secondary = self.prioritized_agents()
+        distance_between_agents = np.linalg.norm(primary.position - secondary.position)
+
+        if distance_between_agents <= INTERFERENCE_RANGE:
+            print("\n----- BEGIN: INTEFERENCE SUBROUTINE ----")
+            print(f"distance between agents: {distance_between_agents}")
+            if self.agents_far_far:
+                primary_closest_idx = primary.find_closest_coil()
+                primary_shortest_path = primary.single_agent_shortest_path(primary_closest_idx)
+                primary.update_motion_plan(primary_shortest_path[:3])
+
+                distances = [(distance_between_agents, primary_closest_idx)]
+                if len(primary_shortest_path) == 2:
+                    primary_shortest_path_1_position = np.array(Agent.calc_raw_coordinates_by_idx(primary_shortest_path[1]))
+                    distance_primary_ref_1_to_secondary = np.linalg.norm(secondary.position - primary_shortest_path_1_position)
+                    distances.append((distance_primary_ref_1_to_secondary, self.find_closest_grid_position_idx(primary_shortest_path_1_position)))
+
+                if len(primary_shortest_path) >= 3:
+                    primary_shortest_path_2_position = np.array(Agent.calc_raw_coordinates_by_idx(primary_shortest_path[2]))
+                    distance_primary_ref_2_to_secondary = np.linalg.norm(secondary.position - primary_shortest_path_2_position)
+                    distances.append((distance_primary_ref_2_to_secondary, self.find_closest_grid_position_idx(primary_shortest_path_2_position)))
+
+                _ , deactivated_epicenter_idx = min(distances)
+                deactivated_epicenter = Agent.calc_raw_coordinates_by_idx(deactivated_epicenter_idx)
+                print(f"primary shortest path: {primary_shortest_path}")
+
+            else:
+                primary_ref_position = np.array(Agent.calc_grid_coordinates(primary.ref_trajectory[i]))
+                distance_between_secondary_and_primary_ref_pos = np.linalg.norm(secondary.position - primary_ref_position)
+                deactivated_epicenter = primary.position if (distance_between_secondary_and_primary_ref_pos > distance_between_agents) else primary_ref_position
+                deactivated_epicenter_idx = self.find_closest_grid_position_idx(deactivated_epicenter)
 
             deactivated_adjacency_matrix = self.updated_adjacency_matrix(deactivated_epicenter_idx)
-            black.adjacency_matrix = deactivated_adjacency_matrix
+            # deactivated_adjacency_matrix = self.updated_adjacency_matrix(primary_closest_idx)
 
+            secondary.adjacency_matrix = deactivated_adjacency_matrix
+            secondary_shortest_path = secondary.single_agent_shortest_path()
+            secondary.update_motion_plan(secondary_shortest_path[:2])
+
+            print(f"secondary shortest path: {secondary_shortest_path}")
+            print("----- END: INTEFERENCE SUBROUTINE ---- \n")
+
+    def prioritized_agents(self):
+        yellow = self.retrieve_agent(AgentColor.YELLOW)
+        black  = self.retrieve_agent(AgentColor.BLACK)
+        self.agents_far_far = False
+
+        if yellow.is_close_to_reference() and not black.is_close_to_reference():
+            print("yellow: close, black: far")
+            return yellow, black
         elif black.is_close_to_reference() and not yellow.is_close_to_reference():
             print("black: close, yellow: far")
-            distance_black_yellow = np.linalg.norm(black.position - yellow.position)
-            black_ref_position = np.array(Agent.calc_grid_coordinates(black.ref_trajectory[self.current_control_iteration]))
-            distance_yellow_black_ref = np.linalg.norm(yellow.position - black_ref_position)
-            deactivated_epicenter = black.position if (distance_yellow_black_ref > distance_black_yellow ) else black_ref_position
-            deactivated_epicenter_idx = self.find_closest_grid_position_idx(deactivated_epicenter)
-
-            deactivated_adjacency_matrix = self.updated_adjacency_matrix(deactivated_epicenter_idx)
-            yellow.adjacency_matrix = deactivated_adjacency_matrix
-
-        elif not black.is_close_to_reference() and not yellow.is_close_to_reference():
+            return black, yellow
+        else:
             print("yellow: far, black: far")
-            yellow_closest_idx = yellow.find_closest_coil()
-            yellow_shortest_path = yellow.single_agent_shortest_path(yellow_closest_idx)
-            yellow.update_motion_plan(yellow_shortest_path[:3])
-
-            # distance_black_yellow = np.linalg.norm(black.position - yellow.position)
-            # distances = [(distance_black_yellow, yellow_closest_idx)]
-
-            # if len(yellow_shortest_path) == 2:
-            #     yellow_shortest_path_1_position = np.array(Agent.calc_raw_coordinates_by_idx(yellow_shortest_path[1]))
-            #     distance_yellow_black_ref_1 = np.linalg.norm(black.position - yellow_shortest_path_1_position)
-            #     distances.append((distance_yellow_black_ref_1, self.find_closest_grid_position_idx(yellow_shortest_path_1_position)))
-            
-            # if len(yellow_shortest_path) >= 3:
-            #     yellow_shortest_path_2_position = np.array(Agent.calc_raw_coordinates_by_idx(yellow_shortest_path[2]))
-            #     distance_yellow_black_ref_2 = np.linalg.norm(black.position - yellow_shortest_path_2_position)
-            #     distances.append((distance_yellow_black_ref_2, self.find_closest_grid_position_idx(yellow_shortest_path_2_position)))
-
-            # _ , deactivated_epicenter_idx = min(distances)
-            # deactivated_epicenter = Agent.calc_raw_coordinates_by_idx(deactivated_epicenter_idx)
-
-            if np.linalg.norm(yellow.position - black.position) <= INTERFERENCE_RANGE:
-                self.within_interference_range = True
-                print("\n----- BEGIN: INTEFERENCE SUBROUTINE ----")
-                print(f"yellow shortest path: {yellow_shortest_path}")
-                # deactivated_adjacency_matrix = self.updated_adjacency_matrix(deactivated_epicenter_idx, black)
-                deactivated_adjacency_matrix = self.updated_adjacency_matrix(yellow_closest_idx)
-                # print(f"black trajectory before: {black.input_trajectory[0], black.input_trajectory[1], black.input_trajectory[2]}")
-                black.adjacency_matrix = deactivated_adjacency_matrix
-
-                black_shortest_path = black.single_agent_shortest_path()
-
-                if len(black_shortest_path) == 0: 
-                    raise ValueError
-
-                black.update_motion_plan(black_shortest_path[:3])
-                print(f"black shortest path: {black_shortest_path}")
-                print("----- END: INTEFERENCE SUBROUTINE ---- \n")
+            self.agents_far_far = True
+            return yellow, black
 
     def updated_adjacency_matrix(self, target_idx):
         A = self.initial_adjacency_matrix.copy()
@@ -157,24 +148,6 @@ class Platform:
         for neighbor_idx in neighbors:
             A[neighbor_idx, :] = np.inf
             A[:, neighbor_idx] = np.inf
-
-        return A
-        # neighbors = self.get_neighbors(target_idx)
-
-        # agent_position_idx = agent.find_closest_coil()
-
-        # for neighbor in neighbors:
-        #     A[neighbor, :] = np.inf
-        #     A[:, neighbor] = np.inf
-
-        # buffer_positions = set(neighbors)
-        # for neighbor in neighbors:
-        #     neighbor = np.array(neighbor)
-        #     buffer_positions.update(self.get_neighbors(Agent.calc_closest_idx(*neighbor)))
-
-        # for pos in buffer_positions:
-        #         A[pos, :] = INVALIDATED_NODE_WEIGHT
-        #         A[:, pos] = INVALIDATED_NODE_WEIGHT
 
         return A
     
@@ -230,37 +203,6 @@ class Platform:
 
         return list(neighbors)
 
-
-    # def get_neighbors(self, target_idx):
-    #     neighbors = []
-    #     row, col = Agent.calc_grid_coordinates(target_idx)
-
-    #     for i in range(row - 1, row + 2):
-    #         for j in range(col - 1, col + 2):
-    #             if 0 <= i < GRID_WIDTH and 0 <= j < GRID_WIDTH:
-    #                 neighbors.append((i, j))
-
-    #     for i in range(row - 2, row + 3):
-    #         for j in range(col - 2, col + 3):
-    #             if (abs(i-row) == 2 or abs(j-col) == 2) and 0 <= i < GRID_WIDTH and 0 <= j < GRID_WIDTH:
-    #                 neighbors.append((i, j))
-
-    #     return neighbors
-    
-    # def __get_adjacent_positions(self, position):
-    #     """Return a list of indices directly adjacent to the given position index."""
-    #     adjacent_positions = []
-    #     row, col = position[0], position[1]
-
-    #     for i, j in [(-1, 0), (1, 0), (0, -1), (0, 1), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
-    #         new_row, new_col = row + i, col + j
-    #         if 0 <= new_row < GRID_WIDTH and 0 <= new_col < GRID_WIDTH:
-    #             adjacent_positions.append(new_row * GRID_WIDTH + new_col)
-
-    #     return adjacent_positions
-
-    ######### multi-agent Dijkstra ##########
-
     ###### Initializer Functions ######
 
     def generate_meshgrid(self):
@@ -284,7 +226,7 @@ class Platform:
 
     def generate_initial_adjacency_matrix(self):
         num_coils = GRID_WIDTH * GRID_WIDTH
-        A = np.zeros((num_coils, num_coils))
+        A = np.full((num_coils, num_coils), np.inf)
 
         for i in range(GRID_WIDTH):
             for j in range(GRID_WIDTH):
