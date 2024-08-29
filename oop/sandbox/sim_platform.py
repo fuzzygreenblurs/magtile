@@ -1,0 +1,94 @@
+from sim_agent import SimAgent
+import numpy as np
+import pdb 
+import asyncio
+
+
+class Platform:
+    GRID_WIDTH             = 15
+    YELLOW_ORBIT           = [26, 27]
+    BLACK_ORBIT            = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
+    INTIAL_BLACK_POSITION  = [-8, -8]
+    INTIAL_YELLOW_POSITION = [6, -9]
+    NUM_SAMPLES            = 3200
+    FIELD_RANGE            = 3.5
+
+    def __init__(self):
+        self.grid_x, self.grid_y = np.meshgrid(np.arange(self.GRID_WIDTH), np.arange(self.GRID_WIDTH))
+        self.generate_adjacency_matrix()
+        self.create_agents()
+
+        self.black_agent = [a for a in self.agents if a.color == "black"][0]
+        self.yellow_agent = None
+
+    async def control(self):
+        for i in range(self.NUM_SAMPLES):
+            self.current_control_iteration = i            
+            self.update_all_agent_positions()
+
+            # TODO: simulate second agent moving through the workspace
+                # do this by invalidating 3x3 or 5x5 grid moving through adjacency matrix for black
+
+            await self.advance_agents()
+
+    def update_all_agent_positions(self):
+        # this simulates updating the stored position after reading from the prior actuation step
+        for a in self.agents:
+            a.position = a.position_at_end_of_prior_iteration
+
+    def plan_for_interference(self):
+        pass
+
+    def generate_adjacency_matrix(self):
+        num_coils = self.GRID_WIDTH * self.GRID_WIDTH
+        grid_shape = (self.GRID_WIDTH, self.GRID_WIDTH)
+        A = np.full((num_coils, num_coils), np.inf)
+
+        for i in range(self.GRID_WIDTH):
+            for j in range(self.GRID_WIDTH):
+                current_idx = np.ravel_multi_index((i, j), grid_shape)
+                neighbors = np.array([
+                    [i, j - 1],
+                    [i, j + 1],
+                    [i - 1, j],
+                    [i + 1, j],
+                    [i - 1, j - 1],
+                    [i - 1, j + 1],
+                    [i + 1, j - 1],
+                    [i + 1, j + 1],
+                ])
+
+                for n_i, n_j in neighbors:
+                    if 0 <= n_i < self.GRID_WIDTH and 0 <= n_j < self.GRID_WIDTH:
+                        neighbor_index = np.ravel_multi_index((int(n_i), int(n_j)), grid_shape)
+                        distance = np.linalg.norm(np.array([i, j]) - np.array([n_i, n_j]))
+                        A[current_idx, neighbor_index] = distance
+                        A[neighbor_index, current_idx] = distance
+
+        self.initial_adjacency_matrix = A
+
+    def create_agents(self):
+        black = SimAgent(self, "black", self.BLACK_ORBIT, self.INTIAL_BLACK_POSITION)
+        # yellow = SimAgent(self, "yellow", self.YELLOW_ORBIT, self.INTIAL_YELLOW_POSITION)
+        # self.agents = [black, yellow]
+        self.agents = [black]
+
+    def idx_to_grid(self, idx):
+        row = idx // self.GRID_WIDTH
+        col = idx % self.GRID_WIDTH
+        return row, col
+
+    def grid_to_idx(self, row, col):
+        return (row * self.GRID_WIDTH) + col
+
+    def cartesian_to_idx(self, x, y):
+        # Convert Cartesian coordinates to grid indices
+        i = int(7 - y)  # Y-axis: Invert the y-coordinate and shift
+        j = int(x + 7)  # X-axis: Shift the x-coordinate
+
+        # Convert grid indices to scalar index
+        index = i * self.GRID_WIDTH + j
+
+        return index
+    
+platform = Platform()   
