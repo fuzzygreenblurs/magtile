@@ -22,30 +22,7 @@ class Platform:
         self.create_agents()
 
         self.black_agent = [a for a in self.agents if a.color == "black"][0]
-        self.yellow_agent = None
-
-    # async def control(self):
-    #     print("gets to control call")
-    #     for i in range(self.NUM_SAMPLES):
-    #         time.sleep(1)
-    #         self.current_control_iteration = i            
-    #         print(f"control loop: {i}")
-    #         self.update_all_agent_positions()
-
-    #         # TODO: simulate second agent moving through the workspace
-    #             # do this by invalidating 3x3 or 5x5 grid moving through adjacency matrix for black
-
-    #         # self.shared_data["black_position"] = self.black_agent.position
-    #         # self.shared_data["yellow_position"] = self.yellow_position.position
-    #         # self.shared_data["yellow_ref_trajectory"] = self.black_agent.ref_trajectory
-    #         # self.shared_data["yellow_input_trajectory"] = self.black_agent.input_trajectory
- 
-    #         self.advance_agents()
-
-    #         shared_data = {
-    #             "black_ref_trajectory" : self.black_agent.ref_trajectory,
-    #             "black_input_trajectory" : self.black_agent.input_trajectory
-    #         }
+        self.yellow_agent = [a for a in self.agents if a.color == "yellow"][0]
 
     def advance_agents(self):
         [a.advance() for a in self.agents]
@@ -93,9 +70,9 @@ class Platform:
 
     def create_agents(self):
         black = SimAgent(self, "black", self.BLACK_ORBIT, self.INTIAL_BLACK_POSITION)
-        # yellow = SimAgent(self, "yellow", self.YELLOW_ORBIT, self.INTIAL_YELLOW_POSITION)
-        # self.agents = [black, yellow]
-        self.agents = [black]
+        # self.agents = [black]
+        yellow = SimAgent(self, "yellow", self.YELLOW_ORBIT, self.INTIAL_YELLOW_POSITION)
+        self.agents = [black, yellow]
 
     def idx_to_grid(self, idx):
         row = idx // self.GRID_WIDTH

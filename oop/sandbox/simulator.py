@@ -56,6 +56,7 @@ def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, y
 
     # Plot the first point of the black trajectory in a different color
     ax.plot(black_x[0], black_y[0], 'o', color='blue', markersize=10, label='Black Start Point')
+    ax.plot(yellow_x[0], yellow_y[0], 'o', color='orange', markersize=10, label='Yellow Start Point')
 
     # Plot the remaining points of the black trajectory
     black_line, = ax.plot(black_x, black_y, 'o-', color='black', label='Black Trajectory')
@@ -84,10 +85,10 @@ def run_control_loop(platform):
 if __name__ == "__main__":
     platform = Platform()
 
-    yellow_ref_trajectory = np.array([18, 33, 48])
-    yellow_input_trajectory = np.array([18, 33, 48])
     black_ref_trajectory = platform.black_agent.ref_trajectory
     black_input_trajectory = platform.black_agent.input_trajectory[0:5]
+    yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
+    yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:5]
 
     update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
 
@@ -98,10 +99,10 @@ if __name__ == "__main__":
         platform.update_all_agent_positions()
         platform.advance_agents()
 
-        yellow_input_trajectory = np.array([18, 33, 48])
         black_input_trajectory = platform.black_agent.input_trajectory[i:i+5]
+        yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+5]
         update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
-        print("black input trajectory: ", black_input_trajectory)
+        # print("black input trajectory: ", black_input_trajectory)
         plt.pause(0.1)
         # time.sleep(1)
         i += 1
