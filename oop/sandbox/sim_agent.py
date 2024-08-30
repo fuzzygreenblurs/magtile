@@ -26,6 +26,17 @@ class SimAgent:
             else:
                 shortest_path = self.single_agent_shortest_path()
                 self.update_motion_plan(shortest_path[:2])
+
+                # grid_0 = self.platform.idx_to_grid(shortest_path[0])
+                # grid_1 = self.platform.idx_to_grid(shortest_path[1])
+                # print("")
+
+                # cartesian_0 =  self.platform.grid_to_cartesian(*grid_0)
+                # cartesian_1 =  self.platform.grid_to_cartesian(*grid_1)
+
+                # print("shortest_path: ", shortest_path) {
+                # print("grid coordinates: ", grid_0, grid_1)
+                # print("cartesian coordinates: ", cartesian_0, cartesian_1})
                 self.__actuate(self.input_trajectory[i])
                 self.__actuate(self.input_trajectory[i+1])
 
@@ -39,16 +50,12 @@ class SimAgent:
         position_idx = int(self.platform.cartesian_to_idx(*self.position))
         graph = nx.from_numpy_array(self.adjacency_matrix)
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
-
-        print("cartesian_position", self.position, "position_idx: ", position_idx, "ref_position_idx: ", ref_position_idx)
-        print("cartesian_position", self.position, "position_idx: ", position_idx, "ref_position_idx: ", ref_position_idx)
-
         return nx.dijkstra_path(graph, position_idx, ref_position_idx)
 
-    def __actuate(self, new_position):
+    def __actuate(self, new_position_idx):
         i = self.platform.current_control_iteration
-        # new_position = self.platform.idx_to_grid(new_position)
-        self.position_at_end_of_prior_iteration = self.platform.idx_to_grid(new_position)
+        new_position = self.platform.idx_to_grid(new_position_idx)
+        self.position_at_end_of_prior_iteration = self.platform.grid_to_cartesian(*new_position)
         
         #TODO: make these functions async again to simulate concurrency
         # time.sleep(0)

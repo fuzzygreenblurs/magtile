@@ -10,6 +10,7 @@ class Platform:
     GRID_WIDTH             = 15
     YELLOW_ORBIT           = [26, 27]
     BLACK_ORBIT            = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
+    # BLACK_ORBIT            = [112, 97, 81, 80, 94, 109, 125, 126]
     INTIAL_BLACK_POSITION  = [-4, -4]
     INTIAL_YELLOW_POSITION = [6, -4]
     NUM_SAMPLES            = 3200
@@ -23,28 +24,28 @@ class Platform:
         self.black_agent = [a for a in self.agents if a.color == "black"][0]
         self.yellow_agent = None
 
-    async def control(self):
-        print("gets to control call")
-        for i in range(self.NUM_SAMPLES):
-            time.sleep(1)
-            self.current_control_iteration = i            
-            print(f"control loop: {i}")
-            self.update_all_agent_positions()
+    # async def control(self):
+    #     print("gets to control call")
+    #     for i in range(self.NUM_SAMPLES):
+    #         time.sleep(1)
+    #         self.current_control_iteration = i            
+    #         print(f"control loop: {i}")
+    #         self.update_all_agent_positions()
 
-            # TODO: simulate second agent moving through the workspace
-                # do this by invalidating 3x3 or 5x5 grid moving through adjacency matrix for black
+    #         # TODO: simulate second agent moving through the workspace
+    #             # do this by invalidating 3x3 or 5x5 grid moving through adjacency matrix for black
 
-            # self.shared_data["black_position"] = self.black_agent.position
-            # self.shared_data["yellow_position"] = self.yellow_position.position
-            # self.shared_data["yellow_ref_trajectory"] = self.black_agent.ref_trajectory
-            # self.shared_data["yellow_input_trajectory"] = self.black_agent.input_trajectory
+    #         # self.shared_data["black_position"] = self.black_agent.position
+    #         # self.shared_data["yellow_position"] = self.yellow_position.position
+    #         # self.shared_data["yellow_ref_trajectory"] = self.black_agent.ref_trajectory
+    #         # self.shared_data["yellow_input_trajectory"] = self.black_agent.input_trajectory
  
-            self.advance_agents()
+    #         self.advance_agents()
 
-            shared_data = {
-                "black_ref_trajectory" : self.black_agent.ref_trajectory,
-                "black_input_trajectory" : self.black_agent.input_trajectory
-            }
+    #         shared_data = {
+    #             "black_ref_trajectory" : self.black_agent.ref_trajectory,
+    #             "black_input_trajectory" : self.black_agent.input_trajectory
+    #         }
 
     def advance_agents(self):
         [a.advance() for a in self.agents]
@@ -56,8 +57,8 @@ class Platform:
         # this simulates updating the stored position after reading from the prior actuation step
         for a in self.agents:
             # for the sake of simulation, we will assume readings come-in cartesian form
-            new_position = self.grid_to_cartesian(*a.position_at_end_of_prior_iteration)
-            a.position = new_position
+            a.position = a.position_at_end_of_prior_iteration
+            print(f"{a.color}: {a.position}")
 
     def plan_for_interference(self):
         pass
@@ -114,8 +115,9 @@ class Platform:
 
         return index
     
-    def grid_to_cartesian(self, x_top_left, y_top_left):
+    def grid_to_cartesian(self, x, y):
         # Convert coordinates from the upper left origin to the centered origin
-        x_centered = x_top_left - self.GRID_WIDTH // 2
-        y_centered = self.GRID_WIDTH // 2 - y_top_left
+        center_offset = (self.GRID_WIDTH - 1) // 2
+        x_centered = y - center_offset
+        y_centered = center_offset - x
         return x_centered, y_centered
