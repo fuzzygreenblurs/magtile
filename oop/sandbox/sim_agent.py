@@ -2,6 +2,7 @@ import networkx as nx
 import numpy as np
 import asyncio
 import time
+import pdb
 
 class SimAgent:
     def __init__(self, platform, color, orbit, position):
@@ -14,12 +15,12 @@ class SimAgent:
         self.adjacency_matrix = self.platform.initial_adjacency_matrix
         self.position_at_end_of_prior_iteration = position
 
-    async def advance(self):
+    def advance(self):
         i = self.platform.current_control_iteration
         if i < len(self.input_trajectory):
-            ref_position = self.platform.grid_to_idx(self.ref_trajectory[i])
+            ref_position = self.platform.idx_to_grid(self.ref_trajectory[i])
 
-            error = np.linalg.norm(self.position - ref_position)
+            error = np.linalg.norm(np.array(self.position) - np.array(ref_position))
             if error <= self.platform.FIELD_RANGE:
                 self.__actuate(self.input_trajectory[i])
             else:
@@ -35,15 +36,19 @@ class SimAgent:
             self.input_trajectory[input_step] = inputs[s]
 
     def single_agent_shortest_path(self):
-        position_idx = self.platform.grid_to_idx(self.position)
+        position_idx = int(self.platform.cartesian_to_idx(*self.position))
         graph = nx.from_numpy_array(self.adjacency_matrix)
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
+
+        print("cartesian_position", self.position, "position_idx: ", position_idx, "ref_position_idx: ", ref_position_idx)
+        print("cartesian_position", self.position, "position_idx: ", position_idx, "ref_position_idx: ", ref_position_idx)
+
         return nx.dijkstra_path(graph, position_idx, ref_position_idx)
 
-    def __actuate(self):
+    def __actuate(self, new_position):
         i = self.platform.current_control_iteration
-        new_position = self.platform.idx_to_grid(self.input_trajectory[i])
-        self.position_at_end_of_prior_iteration = new_position
+        # new_position = self.platform.idx_to_grid(new_position)
+        self.position_at_end_of_prior_iteration = self.platform.idx_to_grid(new_position)
         
         #TODO: make these functions async again to simulate concurrency
         # time.sleep(0)

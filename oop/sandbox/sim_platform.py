@@ -2,14 +2,16 @@ from sim_agent import SimAgent
 import numpy as np
 import pdb 
 import asyncio
+from shared_data import shared_data
+import time
 
 
 class Platform:
     GRID_WIDTH             = 15
     YELLOW_ORBIT           = [26, 27]
     BLACK_ORBIT            = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
-    INTIAL_BLACK_POSITION  = [-8, -8]
-    INTIAL_YELLOW_POSITION = [6, -9]
+    INTIAL_BLACK_POSITION  = [-4, -4]
+    INTIAL_YELLOW_POSITION = [6, -4]
     NUM_SAMPLES            = 3200
     FIELD_RANGE            = 3.5
 
@@ -22,19 +24,40 @@ class Platform:
         self.yellow_agent = None
 
     async def control(self):
+        print("gets to control call")
         for i in range(self.NUM_SAMPLES):
+            time.sleep(1)
             self.current_control_iteration = i            
+            print(f"control loop: {i}")
             self.update_all_agent_positions()
 
             # TODO: simulate second agent moving through the workspace
                 # do this by invalidating 3x3 or 5x5 grid moving through adjacency matrix for black
 
-            await self.advance_agents()
+            # self.shared_data["black_position"] = self.black_agent.position
+            # self.shared_data["yellow_position"] = self.yellow_position.position
+            # self.shared_data["yellow_ref_trajectory"] = self.black_agent.ref_trajectory
+            # self.shared_data["yellow_input_trajectory"] = self.black_agent.input_trajectory
+ 
+            self.advance_agents()
+
+            shared_data = {
+                "black_ref_trajectory" : self.black_agent.ref_trajectory,
+                "black_input_trajectory" : self.black_agent.input_trajectory
+            }
+
+    def advance_agents(self):
+        [a.advance() for a in self.agents]
 
     def update_all_agent_positions(self):
+        if self.current_control_iteration == 0:
+            return 
+        
         # this simulates updating the stored position after reading from the prior actuation step
         for a in self.agents:
-            a.position = a.position_at_end_of_prior_iteration
+            # for the sake of simulation, we will assume readings come-in cartesian form
+            new_position = self.grid_to_cartesian(*a.position_at_end_of_prior_iteration)
+            a.position = new_position
 
     def plan_for_interference(self):
         pass
@@ -87,8 +110,12 @@ class Platform:
         j = int(x + 7)  # X-axis: Shift the x-coordinate
 
         # Convert grid indices to scalar index
-        index = i * self.GRID_WIDTH + j
+        index = np.int64(i * self.GRID_WIDTH + j)
 
         return index
     
-platform = Platform()   
+    def grid_to_cartesian(self, x_top_left, y_top_left):
+        # Convert coordinates from the upper left origin to the centered origin
+        x_centered = x_top_left - self.GRID_WIDTH // 2
+        y_centered = self.GRID_WIDTH // 2 - y_top_left
+        return x_centered, y_centered

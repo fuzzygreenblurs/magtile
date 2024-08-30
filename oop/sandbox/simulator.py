@@ -3,6 +3,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sim_platform import Platform
+from shared_data import shared_data
+import threading
 
 GRID_SIZE = 15
 
@@ -21,7 +23,7 @@ def create_grid():
     black_ref_line, = ax.plot([], [], 'o-', color='purple', label='Black Ref Trajectory')
     yellow_ref_line, = ax.plot([], [], 'o-', color='red', label='Yellow Ref Trajectory')
     black_line, = ax.plot([], [], 'o-', color='black', label='Black Trajectory')
-    yellow_line, = ax.plot([], [], 'o-', color='orange', label='Yellow Trajectory')
+    yellow_line, = ax.plot([], [], 'o-', color='yellow', label='Yellow Trajectory')
     ax.legend()
 
     plt.ion()  # Turn on interactive mode
@@ -53,23 +55,33 @@ def run_plot(black_trajectory, yellow_trajectory, black_ref_trajectory,  yellow_
 
     return update_trajectories
 
+def run_control_loop(platform):
+    platform.control()
+
 if __name__ == "__main__":
     platform = Platform()
 
-    black_trajectory = np.array([190, 175, 159])
-    yellow_trajectory = np.array([18, 33, 48])
-    black_ref_trajectory = np.array(platform.black_agent.ref_trajectory)
-    yellow_ref_trajectory = np.ones(len(black_ref_trajectory), dtype=int)
-    # black_trajectory = np.array(platform.black_agent.input_trajectory)
-    # yellow_trajectory = np.ones(len(black_trajectory), dtype=int)
+    yellow_ref_trajectory = np.array([18, 33, 48])
+    yellow_input_trajectory = np.array([18, 33, 48])
+    black_ref_trajectory = platform.black_agent.ref_trajectory
+    black_input_trajectory = platform.black_agent.input_trajectory
 
-    update_trajectories = run_plot(black_trajectory, yellow_trajectory, black_ref_trajectory, yellow_ref_trajectory)
+    update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
 
+    i = 0
     while True:
-        black_trajectory = np.array([190, 175, 159])
-        yellow_trajectory = np.array([18, 33, 48])
-        update_trajectories(black_trajectory, yellow_trajectory, black_ref_trajectory, yellow_ref_trajectory)
-        time.sleep(0.5)
+        platform.current_control_iteration = i           
+        print(f"control loop: {i}")
+        platform.update_all_agent_positions()
+        platform.advance_agents()
+
+        yellow_input_trajectory = np.array([18, 33, 48])
+        black_input_trajectory = platform.black_agent.input_trajectory
+        update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
+        print(black_input_trajectory)
+        plt.pause(0.1)
+        time.sleep(1)
+        i += 1
 
     plt.ioff()  # Turn off interactive mode when done
     plt.show()
