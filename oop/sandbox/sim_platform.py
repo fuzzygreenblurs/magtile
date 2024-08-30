@@ -8,11 +8,13 @@ import time
 
 class Platform:
     GRID_WIDTH             = 15
-    YELLOW_ORBIT           = [26, 27]
+    YELLOW_ORBIT           = [26, 27, 42, 41]
     BLACK_ORBIT            = [112, 112, 97, 97, 81, 81, 80, 80, 94, 94, 109, 109, 125, 125, 126, 126]
     # BLACK_ORBIT            = [112, 97, 81, 80, 94, 109, 125, 126]
     INTIAL_BLACK_POSITION  = [-4, -4]
-    INTIAL_YELLOW_POSITION = [6, -4]
+    # INTIAL_YELLOW_POSITION = [6, -4]
+    INTIAL_YELLOW_POSITION  = [-4, -4]
+    INTIAL_BLACK_POSITION = [6, -4]
     NUM_SAMPLES            = 3200
     FIELD_RANGE            = 3.5
 

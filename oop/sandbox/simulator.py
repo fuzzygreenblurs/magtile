@@ -20,10 +20,10 @@ def create_grid():
     ax.set_aspect('equal')
     # ax.grid(True, which='both', linestyle='--', linewidth=0.5)
 
-    black_ref_line, = ax.plot([], [], 'o-', color='purple', label='Black Ref Trajectory')
-    yellow_ref_line, = ax.plot([], [], 'o-', color='red', label='Yellow Ref Trajectory')
-    black_line, = ax.plot([], [], 'o-', color='black', label='Black Trajectory')
-    yellow_line, = ax.plot([], [], 'o-', color='yellow', label='Yellow Trajectory')
+    black_ref_line, = ax.plot([], [], 'o-', color='purple', label='black ref trajectory')
+    yellow_ref_line, = ax.plot([], [], 'o-', color='red', label='yellow ref trajectory')
+    black_line = ax.plot([], [], 'o-', color='black', label='black Trajectory')
+    yellow_line = ax.plot([], [], 'o-', color='orange', label='yellow Trajectory')
     ax.legend()
 
     plt.ion()  # Turn on interactive mode
@@ -51,18 +51,18 @@ def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, y
     yellow_y, yellow_x = np.unravel_index(yellow_trajectory, (GRID_SIZE, GRID_SIZE))
 
     # Plot the reference trajectories
-    black_ref_line, = ax.plot(black_ref_x, black_ref_y, 'o-', color='purple', label='Black Ref Trajectory')
-    yellow_ref_line, = ax.plot(yellow_ref_x, yellow_ref_y, 'o-', color='red', label='Yellow Ref Trajectory')
+    black_ref_line = ax.plot(black_ref_x, black_ref_y, 'o-', color='purple', label='black ref trajectory')
+    yellow_ref_line = ax.plot(yellow_ref_x, yellow_ref_y, 'o-', color='red', label='yellow ref trajectory')
 
     # Plot the first point of the black trajectory in a different color
-    ax.plot(black_x[0], black_y[0], 'o', color='blue', markersize=10, label='Black Start Point')
-    ax.plot(yellow_x[0], yellow_y[0], 'o', color='orange', markersize=10, label='Yellow Start Point')
+    ax.plot(black_x[0], black_y[0], 'o', color='black', markersize=15)
+    ax.plot(yellow_x[0], yellow_y[0], 'o', color='orange', markersize=15)
 
     # Plot the remaining points of the black trajectory
-    black_line, = ax.plot(black_x, black_y, 'o-', color='black', label='Black Trajectory')
+    black_line = ax.plot(black_x, black_y, 'o-', color='black', label='black trajectory')
 
     # Plot the yellow trajectory
-    yellow_line, = ax.plot(yellow_x, yellow_y, 'o-', color='yellow', label='Yellow Trajectory')
+    yellow_line = ax.plot(yellow_x, yellow_y, 'o-', color='orange', label='yellow trajectory')
     
     ax.legend()
 
@@ -86,9 +86,9 @@ if __name__ == "__main__":
     platform = Platform()
 
     black_ref_trajectory = platform.black_agent.ref_trajectory
-    black_input_trajectory = platform.black_agent.input_trajectory[0:5]
+    black_input_trajectory = platform.black_agent.input_trajectory[0:2]
     yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
-    yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:5]
+    yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:2]
 
     update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
 
@@ -96,15 +96,16 @@ if __name__ == "__main__":
     while True:
         platform.current_control_iteration = i           
         print(f"\n--- control loop: {i} ----")
+        
         platform.update_all_agent_positions()
+        platform.plan_for_interference()
         platform.advance_agents()
 
-        black_input_trajectory = platform.black_agent.input_trajectory[i:i+5]
-        yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+5]
+        black_input_trajectory = platform.black_agent.input_trajectory[i:i+2]
+        yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+2]
         update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
-        # print("black input trajectory: ", black_input_trajectory)
-        plt.pause(0.1)
-        # time.sleep(1)
+        # plt.pause(0.3)
+        
         i += 1
 
     plt.ioff()  # Turn off interactive mode when done
