@@ -86,9 +86,14 @@ if __name__ == "__main__":
     platform = Platform()
 
     black_ref_trajectory = platform.black_agent.ref_trajectory
-    black_input_trajectory = platform.black_agent.input_trajectory[0:2]
+    black_input_trajectory = platform.black_agent.shortest_path
     yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
-    yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:2]
+    yellow_input_trajectory = platform.yellow_agent.shortest_path
+    
+    # black_ref_trajectory = platform.black_agent.ref_trajectory
+    # black_input_trajectory = platform.black_agent.input_trajectory[0:2]
+    # yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
+    # yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:2]
 
     update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
 
@@ -101,8 +106,10 @@ if __name__ == "__main__":
         platform.plan_for_interference()
         platform.advance_agents()
 
-        black_input_trajectory = platform.black_agent.input_trajectory[i:i+2]
-        yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+2]
+        # black_input_trajectory = platform.black_agent.input_trajectory[i:i+2]
+        # yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+2]
+        black_input_trajectory = platform.black_agent.shortest_path
+        yellow_input_trajectory = platform.yellow_agent.shortest_path
         update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
         # plt.pause(0.3)
         

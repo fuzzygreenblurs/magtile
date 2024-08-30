@@ -14,6 +14,7 @@ class SimAgent:
         self.position = position
         self.adjacency_matrix = self.platform.initial_adjacency_matrix
         self.position_at_end_of_prior_iteration = position
+        self.shortest_path = None
 
     def advance(self):
         i = self.platform.current_control_iteration
@@ -50,7 +51,8 @@ class SimAgent:
         position_idx = int(self.platform.cartesian_to_idx(*self.position))
         graph = nx.from_numpy_array(self.adjacency_matrix)
         ref_position_idx = self.ref_trajectory[self.platform.current_control_iteration]
-        return nx.dijkstra_path(graph, position_idx, ref_position_idx)
+        self.shortest_path = nx.dijkstra_path(graph, position_idx, ref_position_idx)
+        return self.shortest_path
 
     def __actuate(self, new_position_idx):
         i = self.platform.current_control_iteration
