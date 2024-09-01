@@ -12,6 +12,7 @@ def create_grid():
     """Create a grid as a scatter plot."""
     fig, ax = plt.subplots()
     grid_y, grid_x = np.meshgrid(np.arange(GRID_SIZE), np.arange(GRID_SIZE))
+
     ax.scatter(grid_x, grid_y, color='gray', s=10)
     ax.set_xlim(-1, GRID_SIZE)
     ax.set_ylim(GRID_SIZE, -1)  # Invert the y-axis to place the origin at the top left
@@ -31,15 +32,34 @@ def create_grid():
 
     return fig, ax, black_line, yellow_line, black_ref_line, yellow_ref_line
 
-def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, yellow_ref_trajectory, black_line, yellow_line, black_ref_line, yellow_ref_line):
+def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, yellow_ref_trajectory, black_line, yellow_line, black_ref_line, yellow_ref_line, platform):
     """Update the plot with new trajectories."""
     
     # Clear the entire plot and re-plot the grid
     ax.cla()
+    # deactivated_positions = platform.deactivated_positions
     grid_y, grid_x = np.meshgrid(np.arange(GRID_SIZE), np.arange(GRID_SIZE))
-    ax.scatter(grid_x, grid_y, color='gray', s=10)
+    flat_grid_x = grid_x.flatten()
+    flat_grid_y = grid_y.flatten()
+
+    # Print debug information
+    # print("Deactivated Positions (Flattened Indices):", deactivated_positions)
+    # print("flat_grid_x:", flat_grid_x)
+    # print("flat_grid_y:", flat_grid_y)
+
+    # # Determine the valid and invalid positions
+    valid_mask = np.ones(flat_grid_x.shape, dtype=bool)
+    # valid_mask[deactivated_positions] = False
+
+    # # Plot valid positions in gray
+    ax.scatter(flat_grid_x[valid_mask], flat_grid_y[valid_mask], color='gray', s=10, label='Active Positions')
+    
+    # # Plot invalid (deactivated) positions in red
+    # ax.scatter(flat_grid_x[~valid_mask], flat_grid_y[~valid_mask], color='red', s=50, marker='x', label='Deactivated Positions')
+
+    # ax.scatter(grid_x, grid_y, color='gray', s=10)
     ax.set_xlim(-1, GRID_SIZE)
-    ax.set_ylim(GRID_SIZE, -1)  # Keep the origin at the top left
+    ax.set_ylim(GRID_SIZE, -1)  # Invert the y-axis to place the origin at the top left
     ax.set_xticks(np.arange(0, GRID_SIZE))
     ax.set_yticks(np.arange(0, GRID_SIZE))
     ax.set_aspect('equal')
@@ -70,12 +90,12 @@ def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, y
     ax.figure.canvas.draw()
     ax.figure.canvas.flush_events()
 
-def run_plot(black_trajectory, yellow_trajectory, black_ref_trajectory,  yellow_ref_trajectory):
+def run_plot(black_trajectory, yellow_trajectory, black_ref_trajectory,  yellow_ref_trajectory, platform):
     """Initialize the plot and update it dynamically."""
     fig, ax, black_line, yellow_line, black_ref_line, yellow_ref_line = create_grid()
 
-    def update_trajectories(new_black_traj, new_yellow_traj, new_black_ref_trajectory, new_yellow_ref_trajectory):
-        update_plot(ax, new_black_traj, new_yellow_traj, new_black_ref_trajectory, new_yellow_ref_trajectory, black_line, yellow_line, black_ref_line, yellow_ref_line)
+    def update_trajectories(new_black_traj, new_yellow_traj, new_black_ref_trajectory, new_yellow_ref_trajectory, platform):
+        update_plot(ax, new_black_traj, new_yellow_traj, new_black_ref_trajectory, new_yellow_ref_trajectory, black_line, yellow_line, black_ref_line, yellow_ref_line, platform)
 
     return update_trajectories
 
@@ -95,7 +115,7 @@ if __name__ == "__main__":
     # yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
     # yellow_input_trajectory = platform.yellow_agent.input_trajectory[0:2]
 
-    update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
+    update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
 
     i = 0
     while True:
@@ -110,7 +130,7 @@ if __name__ == "__main__":
         # yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+2]
         black_input_trajectory = platform.black_agent.shortest_path
         yellow_input_trajectory = platform.yellow_agent.shortest_path
-        update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory)
+        update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
         plt.pause(1)
         
         i += 1

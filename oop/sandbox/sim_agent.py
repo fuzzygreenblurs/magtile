@@ -28,16 +28,6 @@ class SimAgent:
                 shortest_path = self.single_agent_shortest_path()
                 self.update_motion_plan(shortest_path[:2])
 
-                # grid_0 = self.platform.idx_to_grid(shortest_path[0])
-                # grid_1 = self.platform.idx_to_grid(shortest_path[1])
-                # print("")
-
-                # cartesian_0 =  self.platform.grid_to_cartesian(*grid_0)
-                # cartesian_1 =  self.platform.grid_to_cartesian(*grid_1)
-
-                # print("shortest_path: ", shortest_path) {
-                # print("grid coordinates: ", grid_0, grid_1)
-                # print("cartesian coordinates: ", cartesian_0, cartesian_1})
                 self.__actuate(self.input_trajectory[i])
                 self.__actuate(self.input_trajectory[i+1])
 
@@ -61,3 +51,44 @@ class SimAgent:
         
         #TODO: make these functions async again to simulate concurrency
         # time.sleep(0)
+
+    ###### INTEFERENCE #########
+    def is_close_to_reference(self):
+        i = self.platform.current_control_iteration
+
+        ref_trajectory_position = np.array(self.platform.idx_to_grid(self.ref_trajectory[i]))
+        current_position = np.array(self.platform.cartesian_to_grid(*self.position))
+
+        # print(ref_trajectory_position, current_position)
+
+        error = np.linalg.norm(ref_trajectory_position - current_position)
+        if error <= self.platform.FIELD_RANGE:
+            print(f"{self.color}: {error}")
+            return True
+        
+        print(f"{self.color}: {error}")
+        return False
+    
+    def set_deactivated_positions_surrounding_target(self, target_idx):
+        neighbors = self.get_one_layer_neighbors(target_idx)
+    
+        for neighbor_idx in neighbors:
+            self.adjacency_matrix[neighbor_idx, :] = np.inf
+            self.adjacency_matrix[:, neighbor_idx] = np.inf
+    
+    def get_one_layer_neighbors(self, position_idx):
+        """
+        Returns the indices of the positions that are one layer (directly adjacent)
+        around the given position in the grid.
+        """
+        neighbors = []
+        row, col = self.platform.idx_to_grid(position_idx)
+
+        # Loop through adjacent cells
+        for i in range(row - 1, row + 2):
+            for j in range(col - 1, col + 2):
+                if 0 <= i < self.platform.GRID_WIDTH and 0 <= j < self.platform.GRID_WIDTH:
+                    if not (i == row and j == col):  # Exclude the center position
+                        neighbors.append(self.platform.grid_to_idx(i, j))   
+
+        return neighbors
