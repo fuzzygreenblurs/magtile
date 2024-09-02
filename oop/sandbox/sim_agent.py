@@ -15,6 +15,7 @@ class SimAgent:
         self.adjacency_matrix = self.platform.initial_adjacency_matrix
         self.position_at_end_of_prior_iteration = position
         self.shortest_path = None
+        self.deactivated_positions = []
 
     def advance(self):
         i = self.platform.current_control_iteration
@@ -25,8 +26,9 @@ class SimAgent:
             if error <= self.platform.FIELD_RANGE:
                 self.__actuate(self.input_trajectory[i])
             else:
-                shortest_path = self.single_agent_shortest_path()
-                self.update_motion_plan(shortest_path[:2])
+                if(self.motion_plan_updated_at_platform_level == False ):
+                    shortest_path = self.single_agent_shortest_path()
+                    self.update_motion_plan(shortest_path[:2])
 
                 self.__actuate(self.input_trajectory[i])
                 self.__actuate(self.input_trajectory[i+1])
@@ -55,22 +57,19 @@ class SimAgent:
     ###### INTEFERENCE #########
     def is_close_to_reference(self):
         i = self.platform.current_control_iteration
-
+        
         ref_trajectory_position = np.array(self.platform.idx_to_grid(self.ref_trajectory[i]))
         current_position = np.array(self.platform.cartesian_to_grid(*self.position))
 
-        # print(ref_trajectory_position, current_position)
-
         error = np.linalg.norm(ref_trajectory_position - current_position)
         if error <= self.platform.FIELD_RANGE:
-            print(f"{self.color}: {error}")
             return True
         
-        print(f"{self.color}: {error}")
         return False
     
     def set_deactivated_positions_surrounding_target(self, target_idx):
         neighbors = self.get_one_layer_neighbors(target_idx)
+        self.platform.deactivated_neighbors.append(neighbors)
     
         for neighbor_idx in neighbors:
             self.adjacency_matrix[neighbor_idx, :] = np.inf
@@ -89,6 +88,6 @@ class SimAgent:
             for j in range(col - 1, col + 2):
                 if 0 <= i < self.platform.GRID_WIDTH and 0 <= j < self.platform.GRID_WIDTH:
                     if not (i == row and j == col):  # Exclude the center position
-                        neighbors.append(self.platform.grid_to_idx(i, j))   
+                        neighbors.append(self.platform.grid_to_idx(i, j))
 
         return neighbors

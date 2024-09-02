@@ -104,6 +104,7 @@ def run_control_loop(platform):
 
 if __name__ == "__main__":
     platform = Platform()
+    platform.deactivated_neighbors = []
 
     black_ref_trajectory = platform.black_agent.ref_trajectory
     black_input_trajectory = platform.black_agent.shortest_path
@@ -119,19 +120,19 @@ if __name__ == "__main__":
 
     i = 0
     while True:
+        platform.deactivated_neighbors = []
         platform.current_control_iteration = i           
         print(f"\n--- control loop: {i} ----")
         
+        platform.reset_agent_flags()
         platform.update_all_agent_positions()
         platform.plan_for_interference()
         platform.advance_agents()
 
-        # black_input_trajectory = platform.black_agent.input_trajectory[i:i+2]
-        # yellow_input_trajectory = platform.yellow_agent.input_trajectory[i:i+2]
         black_input_trajectory = platform.black_agent.shortest_path
         yellow_input_trajectory = platform.yellow_agent.shortest_path
         update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
-        plt.pause(1)
+        plt.pause(0.01)
         
         i += 1
 
