@@ -157,23 +157,3 @@ class Platform:
 
     def grid_to_idx(self, row, col):
         return (row * GRID_WIDTH) + col
-
-
-    ## TODO: remove me ##
-
-    # TODO: move to main script
-    # async def control(self):
-    #     # print("num samples: ", NUM_SAMPLES)
-    #     for i in range(NUM_SAMPLES):
-    #         for a in self.agents:
-    #             a.motion_plan_updated_at_platform_level = False
-
-    #         self.current_control_iteration = i
-    #         print(f"\n------ {i} ------")
-    #         # print("iteration: ", self.current_control_iteration)
-            
-    #         self.update_agent_positions()
-    #         self.plan_for_interference()
-    #         await self.advance_agents()
-
-    #         # time.sleep(1)
