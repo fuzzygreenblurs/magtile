@@ -25,7 +25,7 @@ def create_grid():
     yellow_ref_line, = ax.plot([], [], 'o-', color='red', label='yellow ref trajectory')
     black_line = ax.plot([], [], 'o-', color='black', label='black Trajectory')
     yellow_line = ax.plot([], [], 'o-', color='orange', label='yellow Trajectory')
-    ax.legend()
+    # ax.legend()
 
     plt.ion()  # Turn on interactive mode
     plt.show()
@@ -37,27 +37,19 @@ def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, y
     
     # Clear the entire plot and re-plot the grid
     ax.cla()
-    # deactivated_positions = platform.deactivated_positions
     grid_y, grid_x = np.meshgrid(np.arange(GRID_WIDTH), np.arange(GRID_WIDTH))
     flat_grid_x = grid_x.flatten()
     flat_grid_y = grid_y.flatten()
 
-    # Print debug information
-    # print("Deactivated Positions (Flattened Indices):", deactivated_positions)
-    # print("flat_grid_x:", flat_grid_x)
-    # print("flat_grid_y:", flat_grid_y)
+    deactivated_indices = [np.ravel_multi_index((y, x), (GRID_WIDTH, GRID_WIDTH)) for x, y in platform.deactivated_positions]
+    deactivated_x = flat_grid_x[deactivated_indices]
+    deactivated_y = flat_grid_y[deactivated_indices]
+    ax.scatter(deactivated_x, deactivated_y, color='red', s=50, marker='x', label='Deactivated Positions')
 
     # # Determine the valid and invalid positions
     valid_mask = np.ones(flat_grid_x.shape, dtype=bool)
-    # valid_mask[deactivated_positions] = False
-
-    # # Plot valid positions in gray
     ax.scatter(flat_grid_x[valid_mask], flat_grid_y[valid_mask], color='gray', s=10, label='Active Positions')
-    
-    # # Plot invalid (deactivated) positions in red
-    # ax.scatter(flat_grid_x[~valid_mask], flat_grid_y[~valid_mask], color='red', s=50, marker='x', label='Deactivated Positions')
 
-    # ax.scatter(grid_x, grid_y, color='gray', s=10)
     ax.set_xlim(-1, GRID_WIDTH)
     ax.set_ylim(GRID_WIDTH, -1)  # Invert the y-axis to place the origin at the top left
     ax.set_xticks(np.arange(0, GRID_WIDTH))
@@ -94,7 +86,7 @@ def update_plot(ax, black_trajectory, yellow_trajectory, black_ref_trajectory, y
     # Plot the yellow trajectory
     yellow_line = ax.plot(yellow_x, yellow_y, 'o-', color='orange', label='yellow trajectory')
     
-    ax.legend()
+    # ax.legend()
 
     # Redraw the canvas with updated data
     ax.figure.canvas.draw()
@@ -112,48 +104,60 @@ def run_plot(black_trajectory, yellow_trajectory, black_ref_trajectory,  yellow_
 if __name__ == '__main__':
     with Actuator("/dev/cu.usbmodem21301") as actuator:
         with redis.Redis(host='localhost', port=6379, db=0) as ipc_client:
-            try:
-                Agent.set_actuator(actuator)
-                platform = Platform(ipc_client)
+            Agent.set_actuator(actuator)
+            platform = Platform(ipc_client)
+            # print("initial state: ")
+            # for a in platform.agents:
+            #         print(f"{a.color}: {a.position}")
 
-                black_ref_trajectory = platform.black_agent.ref_trajectory
+            black_ref_trajectory = platform.black_agent.ref_trajectory
+            black_input_trajectory = platform.black_agent.shortest_path
+            yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
+            yellow_input_trajectory = platform.yellow_agent.shortest_path
+
+            update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
+
+            global i 
+            i = 0
+
+            while True:
+                platform.current_control_iteration = i           
+                print(f"\n--- control loop: {i} ----")  
+
+                platform.reset_interference_parameters()
+                platform.update_agent_positions()
+
+                # if np.linalg.norm(platform.yellow_agent.position - platform.black_agent.position) <= 2 * COIL_SPACING:
+                #     pdb.set_trace()
+
+                platform.plan_for_interference()
+
+                print("black sp: ", platform.black_agent.shortest_path)
+                print("yellow sp: ", platform.yellow_agent.shortest_path)
+
+                asyncio.run(platform.advance_agents())
+
                 black_input_trajectory = platform.black_agent.shortest_path
-                yellow_ref_trajectory = platform.yellow_agent.ref_trajectory
                 yellow_input_trajectory = platform.yellow_agent.shortest_path
 
-                update_trajectories = run_plot(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
-
-                global i 
-                i = 0
-                while True:
-                    platform.current_control_iteration = i           
-                    print(f"\n--- control loop: {i} ----")  
-
-                    platform.reset_agent_flags()
-                    platform.update_agent_positions()
-                    platform.plan_for_interference()
-                    asyncio.run(platform.advance_agents())
-
-                    # black_input_trajectory = platform.black_agent.shortest_path
-                    # yellow_input_trajectory = platform.yellow_agent.shortest_path
-
-                    if platform.black_agent.shortest_path:
-                        black_input_trajectory = platform.black_agent.shortest_path
-                    else:
-                        black_input_trajectory = platform.black_agent.input_trajectory
-                    
-                    if platform.yellow_agent.shortest_path:
-                        yellow_input_trajectory = platform.yellow_agent.shortest_path
-                    else:
-                        yellow_input_trajectory = platform.yellow_agent.input_trajectory
-
-                    update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
-                    # plt.pause(0.01)
-
-                    i += 1
-
-                plt.ioff()  # Turn off interactive mode when done
-                plt.show()
+                if platform.black_agent.shortest_path:
+                    black_input_trajectory = platform.black_agent.shortest_path
+                else:
+                    black_input_trajectory = platform.black_agent.input_trajectory
                 
-            except KeyboardInterrupt:
-                actuator.stop_all()
+                if platform.yellow_agent.shortest_path:
+                    yellow_input_trajectory = platform.yellow_agent.shortest_path
+                else:
+                    yellow_input_trajectory = platform.yellow_agent.input_trajectory
+
+                update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
+                # plt.pause(1)
+
+                if i == 9:
+                    pdb.set_trace()
+
+                i += 1
+
+            plt.ioff()  # Turn off interactive mode when done
+            plt.show()
+        

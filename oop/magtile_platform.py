@@ -1,7 +1,7 @@
+import pdb
 import asyncio
 import json
 import numpy as np
-import pdb
 from agent import Agent
 from agent_color import AgentColor
 from constants import *
@@ -16,24 +16,32 @@ class Platform:
         self.current_control_iteration = 0
         self.deactivated_positions = []
 
-    def reset_agent_flags(self):
+    def reset_interference_parameters(self):
         for a in self.agents:
-            a.motion_plan_updated_at_platform_level = False 
+            a.motion_plan_updated_at_platform_level = False
+            a.adjacency_matrix = self.initial_adjacency_matrix.copy()
+        
+        self.deactivated_positions = []
 
     async def advance_agents(self):
-        print("gets to advance agents in platform")
         await asyncio.gather(*[a.advance() for a in self.agents])
 
     def update_agent_positions(self):
-        messages = self.ipc_client.xrevrange(POSITIONS_STREAM, count=1)
-        if messages:
-            _, message = messages[0]
-            for agent in self.agents:
-                color = f"{agent.color.value}".encode('utf-8')
-                payload = json.loads(message[color].decode())
-                agent.update_position(payload)
-        else:
-            return None
+        '''
+            in cartesian units wrt a centered origin
+        '''
+
+        if OPERATION_MODE == "LIVE":
+            messages = self.ipc_client.xrevrange(POSITIONS_STREAM, count=1)
+            if messages:
+                _, message = messages[0]
+                for agent in self.agents:
+                    color = f"{agent.color.value}".encode('utf-8')
+                    payload = json.loads(message[color].decode())
+                    agent.update_position(payload)
+
+        elif OPERATION_MODE == "SIMULATION":
+            self.simulate_position_readings()
 
     def create_agents(self):
         self.black_agent = Agent(self, AgentColor.BLACK)
@@ -47,55 +55,30 @@ class Platform:
             return
         
         if all(a.is_close_to_reference() for a in self.agents):
-            print("no calculation necessary...")
             return
         
         i = self.current_control_iteration
-        
-        for a in self.agents:
-            a.adjacency_matrix = self.initial_adjacency_matrix.copy()
-        
+
         primary, secondary = self.prioritized_agents()
-        distance_between_agents = np.linalg.norm(primary.position - secondary.position)
+        distance_between_agents = np.linalg.norm(primary.position - secondary.position) * COIL_SPACING
 
         if distance_between_agents <= INTERFERENCE_RANGE:
-            print("WITHIN INTERFERENCE RANGE...")
-            primary_sp = primary.single_agent_shortest_path()
-            primary.update_motion_plan(primary_sp)
-            primary.motion_plan_updated_at_platform_level = True
-
-
-            if self.agents_far_far:
-                primary_projected_positions = [primary_sp[0], primary_sp[1], primary_sp[2]]
-            else:
-                primary_projected_positions = [primary_sp[0], primary_sp[1]]
-            
-                
-            for position in primary_projected_positions:
-                secondary.set_deactivated_positions_surrounding_target(position)
+            secondary.deactivate_positions_within_radius(self.grid_to_idx(*primary.position))
 
             secondary_sp = secondary.single_agent_shortest_path()
             secondary.update_motion_plan(secondary_sp)
             secondary.motion_plan_updated_at_platform_level = True
 
-            print("gets to end of interference planning")
-
     def prioritized_agents(self):
         self.agents_far_far = False
 
         if self.yellow_agent.is_close_to_reference() and not self.black_agent.is_close_to_reference():
-            print("yellow: close, black: far")
             return self.yellow_agent, self.black_agent
         elif self.black_agent.is_close_to_reference() and not self.yellow_agent.is_close_to_reference():
-            print("black: close, yellow: far")
             return self.black_agent, self.yellow_agent
         else:
-            print("yellow: far, black: far")
-            self.agents_far_far = True
             return self.yellow_agent, self.black_agent
-    
     ## initializer functions ##
-
     def generate_meshgrids(self):
         self.grid_x, self.grid_y = np.meshgrid(np.arange(GRID_WIDTH), np.arange(GRID_WIDTH))
 
@@ -157,3 +140,23 @@ class Platform:
 
     def grid_to_idx(self, row, col):
         return (row * GRID_WIDTH) + col
+    
+    def cartesian_to_grid(self, x, y):
+        x_upper_left = int(7 - y)
+        y_upper_left = int(x + 7)
+        return np.array([x_upper_left, y_upper_left])
+    
+    def grid_to_cartesian(self, x, y):
+        # Convert coordinates from the upper left origin to the centered origin
+
+        center_offset = (GRID_WIDTH - 1) // 2
+        x_centered = y - center_offset
+        y_centered = center_offset - x
+        return np.array([x_centered, y_centered])
+    
+    def simulate_position_readings(self):
+        if self.current_control_iteration == 0:
+            return 
+        
+        for a in self.agents:
+            a.update_position(a.simulated_position_at_end_of_prior_iteration)
