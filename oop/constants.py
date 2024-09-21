@@ -7,13 +7,16 @@ import math
     - [#] represents a dimensionless numerical value
 '''
 
-OPERATION_MODE = "SIMULATION" # OPTIONS: "SIMULATION" or "LIVE"
-# OPERATION_MODE = "LIVE" # OPTIONS: "SIMULATION" or "LIVE"
+# OPERATION_MODE = "SIMULATION" # OPTIONS: "SIMULATION" or "LIVE"
+OPERATION_MODE = "LIVE" # OPTIONS: "SIMULATION" or "LIVE"
 
 # official experimental orbits
 # experiment 1: two octagon trajectories
-YELLOW_ORBIT = [40, 41, 57, 72, 86, 85, 69, 54]
-BLACK_ORBIT  = [48, 63, 79, 80, 66, 51, 35, 34]
+BLACK_ORBIT = [16, 17, 32, 31]
+YELLOW_ORBIT  = [27, 28, 43, 42]
+
+# YELLOW_ORBIT = [40, 41, 57, 72, 86, 85, 69, 54]
+# BLACK_ORBIT  = [48, 63, 79, 80, 66, 51, 35, 34]
 
 # experiment 2: two concentric octagons (check 1 coil and 2 coil range)
 # YELLOW_ORBIT = [112, 97, 81, 80, 94, 109, 125, 126]
@@ -49,9 +52,9 @@ SAMPLING_PERIOD       = 0.1                                                     
 FIELD_RANGE                = 3.5                                                # magnetic force range [cm]
 OUT_OF_RANGE               = -1000000
 COERSION_THRESHOLD         = COERSION_THRESHOLD_IN * 2.54                       # coersion threshold [cm]
-INTERFERENCE_RANGE         = 6 * FIELD_RANGE
-# DEACTIVATION_RADIUS        = 2
-DEACTIVATION_RADIUS        = 2 * math.sqrt(2)                                   # [# of diagonals]
+INTERFERENCE_RANGE         = 3
+DEACTIVATION_RADIUS        = 1
+# DEACTIVATION_RADIUS        = 2 * math.sqrt(2)                                   # [# of diagonals]
 SAFE_ZONE_RADIUS           = 1
 INVALIDATED_NODE_WEIGHT    = np.inf
 

@@ -60,14 +60,16 @@ class Platform:
         i = self.current_control_iteration
 
         primary, secondary = self.prioritized_agents()
-        distance_between_agents = np.linalg.norm(primary.position - secondary.position) * COIL_SPACING
+        if np.linalg.norm(primary.position - secondary.position) <= INTERFERENCE_RANGE:
+            print("within interference range...")
+            primary.halt_for_interference = True
+            primary_position_idx = self.grid_to_idx(*primary.position)
 
-        if distance_between_agents <= INTERFERENCE_RANGE:
-            secondary.deactivate_positions_within_radius(self.grid_to_idx(*primary.position))
-
-            secondary_sp = secondary.single_agent_shortest_path()
-            secondary.update_motion_plan(secondary_sp)
+            secondary.deactivate_positions_within_radius(primary_position_idx)
+            secondary.update_motion_plan(secondary.single_agent_shortest_path())
             secondary.motion_plan_updated_at_platform_level = True
+        else:
+            primary.halt_for_interference = False
 
     def prioritized_agents(self):
         self.agents_far_far = False

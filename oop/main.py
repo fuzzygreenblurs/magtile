@@ -126,14 +126,10 @@ if __name__ == '__main__':
 
                 platform.reset_interference_parameters()
                 platform.update_agent_positions()
-
-                # if np.linalg.norm(platform.yellow_agent.position - platform.black_agent.position) <= 2 * COIL_SPACING:
-                #     pdb.set_trace()
-
                 platform.plan_for_interference()
 
-                print("black sp: ", platform.black_agent.shortest_path)
-                print("yellow sp: ", platform.yellow_agent.shortest_path)
+                # print("black input trajectory: ", platform.black_agent.input_trajectory[i:i+4])
+                # print("yellow input trajectory: ", platform.yellow_agent.input_trajectory[i:i+4])
 
                 asyncio.run(platform.advance_agents())
 
@@ -151,13 +147,13 @@ if __name__ == '__main__':
                     yellow_input_trajectory = platform.yellow_agent.input_trajectory
 
                 update_trajectories(black_input_trajectory, yellow_input_trajectory, black_ref_trajectory, yellow_ref_trajectory, platform)
-                # plt.pause(1)
+                # plt.pause(0.1)
 
-                if i == 9:
-                    pdb.set_trace()
+                # if i == 6:
+                #     pdb.set_trace()
 
                 i += 1
 
             plt.ioff()  # Turn off interactive mode when done
             plt.show()
-        
+    

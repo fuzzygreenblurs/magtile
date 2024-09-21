@@ -34,6 +34,7 @@ class Agent:
             self.input_trajectory = self.ref_trajectory.copy()
             self.adjacency_matrix = self.platform.initial_adjacency_matrix.copy()
             self.shortest_path = None
+            self.halt_for_interference = False
 
             if OPERATION_MODE == "SIMULATION":
                 self.simulated_position_at_end_of_prior_iteration = self.position
@@ -43,6 +44,10 @@ class Agent:
 
     async def advance(self):
         if self.is_undetected():
+            return
+        
+        if(self.halt_for_interference):
+            print("halting...")
             return
 
         i = self.platform.current_control_iteration
@@ -60,6 +65,7 @@ class Agent:
                 input_1 = self.platform.idx_to_grid(self.input_trajectory[i])
                 input_2 = self.platform.idx_to_grid(self.input_trajectory[i+1])
                 # print(f"sequentially actuate {input_1} and THEN {input_2}")
+
                 await self.__actuate(self.input_trajectory[i])
                 await self.__actuate(self.input_trajectory[i+1])
 
@@ -106,9 +112,9 @@ class Agent:
                         [i + 1, j + 1]
                     ])
 
-                    for neighbor in neighbors:
+                    for q, neighbor in enumerate(neighbors):
                         ni, nj = neighbor
-                        if 0 <= ni <= GRID_WIDTH and 0 <= nj <= GRID_WIDTH:
+                        if 0 <= ni < GRID_WIDTH and 0 <= nj < GRID_WIDTH:
                             neighbor_idx = self.platform.grid_to_idx(ni, nj)
                             self.adjacency_matrix[candidate_idx, neighbor_idx] = INVALIDATED_NODE_WEIGHT
                             self.adjacency_matrix[neighbor_idx, candidate_idx] = INVALIDATED_NODE_WEIGHT
@@ -166,8 +172,8 @@ class Agent:
         if np.any(measured_position == OUT_OF_RANGE):
             return np.array([OUT_OF_RANGE, OUT_OF_RANGE])
         
-        raw_grid = self.platform.cartesian_to_grid(*np.array(measured_position))
         if OPERATION_MODE == "SIMULATION":
+            raw_grid = self.platform.cartesian_to_grid(*np.array(measured_position))
             return raw_grid
         else:
             distances = np.linalg.norm(self.platform.coil_positions - np.array(measured_position), axis=1)
